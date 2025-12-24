@@ -7,6 +7,7 @@ sonetto-rs is a ps for reverse 1999 made in rust. why? no one tried and succeede
 ![main image](/images/r99-murc.png)
 
 ## How to use sonetto-rs?
+- PS was made to use the pc [version](https://re1999.bluepoch.com/) of the game.
 - Clone the repo
 - Install [rust](https://rust-lang.org/tools/install/)
 - Clone [Sonetto-Data](https://gitlab.com/yoncodes/sonetto-data) 
