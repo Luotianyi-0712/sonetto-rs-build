@@ -37,6 +37,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clone Sonetto-Data from GitLab
+        run: git clone https://gitlab.com/yoncodes/sonetto-data.git sonetto-data
+        shell: bash
+
+      - name: Prepare data files
+        run: |
+          cp -r sonetto-data/excel2json data/
+        shell: bash
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -76,24 +85,30 @@ jobs:
       - name: Prepare artifacts (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p artifacts
+          mkdir -p artifacts/data
           cp target/${{ matrix.target }}/release/gameserver artifacts/
           cp target/${{ matrix.target }}/release/sdkserver artifacts/
           cp common/Config.toml artifacts/
+          cp -r data/excel2json artifacts/data/
+          cp -r data/static artifacts/data/
+          cp -r data/starter artifacts/data/
           cd artifacts
-          tar -czf ../gameserver-${{ matrix.artifact_name }}.tar.gz gameserver Config.toml
-          tar -czf ../sdkserver-${{ matrix.artifact_name }}.tar.gz sdkserver Config.toml
+          tar -czf ../gameserver-${{ matrix.artifact_name }}.tar.gz gameserver Config.toml data
+          tar -czf ../sdkserver-${{ matrix.artifact_name }}.tar.gz sdkserver Config.toml data
 
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
         run: |
-          mkdir artifacts
+          mkdir artifacts\data
           copy target\${{ matrix.target }}\release\gameserver.exe artifacts\
           copy target\${{ matrix.target }}\release\sdkserver.exe artifacts\
           copy common\Config.toml artifacts\
+          xcopy /E /I data\excel2json artifacts\data\excel2json
+          xcopy /E /I data\static artifacts\data\static
+          xcopy /E /I data\starter artifacts\data\starter
           cd artifacts
-          tar -czf ..\gameserver-${{ matrix.artifact_name }}.tar.gz gameserver.exe Config.toml
-          tar -czf ..\sdkserver-${{ matrix.artifact_name }}.tar.gz sdkserver.exe Config.toml
+          tar -czf ..\gameserver-${{ matrix.artifact_name }}.tar.gz gameserver.exe Config.toml data
+          tar -czf ..\sdkserver-${{ matrix.artifact_name }}.tar.gz sdkserver.exe Config.toml data
 
       - name: Upload gameserver artifact
         uses: actions/upload-artifact@v4
