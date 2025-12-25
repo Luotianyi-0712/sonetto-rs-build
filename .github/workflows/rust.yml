@@ -1,0 +1,132 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: linux-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: windows-x64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: macos-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-12-06
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.target }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-target-
+
+      - name: Build gameserver
+        run: cargo build --release --target ${{ matrix.target }} -p gameserver
+
+      - name: Build sdkserver
+        run: cargo build --release --target ${{ matrix.target }} -p sdkserver
+
+      - name: Prepare artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/gameserver artifacts/
+          cp target/${{ matrix.target }}/release/sdkserver artifacts/
+          cp common/Config.toml artifacts/
+          cd artifacts
+          tar -czf ../gameserver-${{ matrix.artifact_name }}.tar.gz gameserver Config.toml
+          tar -czf ../sdkserver-${{ matrix.artifact_name }}.tar.gz sdkserver Config.toml
+
+      - name: Prepare artifacts (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir artifacts
+          copy target\${{ matrix.target }}\release\gameserver.exe artifacts\
+          copy target\${{ matrix.target }}\release\sdkserver.exe artifacts\
+          copy common\Config.toml artifacts\
+          cd artifacts
+          tar -czf ..\gameserver-${{ matrix.artifact_name }}.tar.gz gameserver.exe Config.toml
+          tar -czf ..\sdkserver-${{ matrix.artifact_name }}.tar.gz sdkserver.exe Config.toml
+
+      - name: Upload gameserver artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameserver-${{ matrix.artifact_name }}
+          path: gameserver-${{ matrix.artifact_name }}.tar.gz
+
+      - name: Upload sdkserver artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdkserver-${{ matrix.artifact_name }}
+          path: sdkserver-${{ matrix.artifact_name }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
