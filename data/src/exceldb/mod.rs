@@ -30,6 +30,7 @@ pub mod skill;
 pub mod skill_ex_level;
 pub mod skill_passive_level;
 pub mod skin;
+pub mod store_goods;
 pub mod summon;
 pub mod summon_pool;
 pub mod talent_scheme;
@@ -67,6 +68,7 @@ pub struct GameDB {
     pub skill_ex_level: skill_ex_level::SkillExLevelTable,
     pub skill_passive_level: skill_passive_level::SkillPassiveLevelTable,
     pub skin: skin::SkinTable,
+    pub store_goods: store_goods::StoreGoodsTable,
     pub summon: summon::SummonTable,
     pub summon_pool: summon_pool::SummonPoolTable,
     pub talent_scheme: talent_scheme::TalentSchemeTable,
@@ -164,6 +166,9 @@ impl GameDB {
         let skin = skin::SkinTable::load(
             &format!("{}/skin.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load skin.json: {}", e))?;
+        let store_goods = store_goods::StoreGoodsTable::load(
+            &format!("{}/store_goods.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load store_goods.json: {}", e))?;
         let summon = summon::SummonTable::load(
             &format!("{}/summon.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load summon.json: {}", e))?;
@@ -205,6 +210,7 @@ impl GameDB {
             skill_ex_level,
             skill_passive_level,
             skin,
+            store_goods,
             summon,
             summon_pool,
             talent_scheme,

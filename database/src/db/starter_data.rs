@@ -798,12 +798,21 @@ pub async fn load_starter_items(
         .iter()
         .filter(|i| i.is_show == 1 && i.is_stackable == 1)
         .filter(|i| i.expire_time == "".to_string())
+        .filter(|i| i.id != 481002) //selector for psychube not implimented can't find the item id to push
         .collect();
 
     for item in stackable_items.clone() {
-        let quantity = match item.sub_type {
+        let mut quantity = match item.sub_type {
+            13 => 0, // potrait dupes
+            50 => 1, // dev items 9999
+            66 => 0, // blocks for wilderness
+            70 => 0,
             _ => 100, // Default
         };
+
+        if item.id == 481002 {
+            quantity = 5;
+        }
 
         sqlx::query(
             r#"
@@ -1836,6 +1845,244 @@ pub async fn load_building_info(
         );
     }
 
+    Ok(())
+}
+
+/// Load room info from room_info.json
+pub async fn load_room_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../data/starter/room/room_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_room_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load block infos (placed blocks)
+    if let Some(infos) = data.get("infos").and_then(|v| v.as_array()) {
+        for entry in infos {
+            let block_id = entry.get("blockId").and_then(|v| v.as_i64()).unwrap_or(0);
+            if block_id == 0 {
+                continue;
+            }
+
+            sqlx::query(
+                "INSERT INTO user_blocks (user_id, block_id, x, y, rotate, water_type, block_color)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id, block_id) DO UPDATE SET
+                     x = excluded.x,
+                     y = excluded.y,
+                     rotate = excluded.rotate,
+                     water_type = excluded.water_type,
+                     block_color = excluded.block_color",
+            )
+            .bind(user_id)
+            .bind(block_id as i32)
+            .bind(entry.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("rotate").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("waterType").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(
+                entry
+                    .get("blockColor")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32,
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Get the last building UID for this user or start fresh
+    let last_building_uid: Option<i64> =
+        sqlx::query_scalar("SELECT MAX(uid) FROM user_buildings WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .flatten();
+
+    let mut building_uid = last_building_uid.map(|uid| uid + 1).unwrap_or(20000000);
+
+    // Load building infos
+    if let Some(buildings) = data.get("buildingInfos").and_then(|v| v.as_array()) {
+        for entry in buildings {
+            let define_id = entry.get("defineId").and_then(|v| v.as_i64()).unwrap_or(0);
+            if define_id == 0 {
+                continue;
+            }
+
+            sqlx::query(
+                "INSERT INTO user_buildings (uid, user_id, define_id, in_use, x, y, rotate, level, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(building_uid)
+            .bind(user_id)
+            .bind(define_id as i32)
+            .bind(entry.get("use").and_then(|v| v.as_bool()).unwrap_or(false))
+            .bind(entry.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("rotate").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("level").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(common::time::ServerTime::now_ms())
+            .bind(common::time::ServerTime::now_ms())
+            .execute(&mut **tx)
+            .await?;
+
+            building_uid += 1;
+        }
+    }
+
+    // Load block packages
+    if let Some(packages) = data.get("blockPackages").and_then(|v| v.as_array()) {
+        for entry in packages {
+            let package_id = entry
+                .get("blockPackageId")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            if package_id == 0 {
+                continue;
+            }
+
+            let unused: Vec<i32> = entry
+                .get("unUseBlockIds")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_i64().map(|n| n as i32))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let used: Vec<i32> = entry
+                .get("useBlockIds")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_i64().map(|n| n as i32))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let unused_json = serde_json::to_string(&unused).unwrap_or_else(|_| "[]".to_string());
+            let used_json = serde_json::to_string(&used).unwrap_or_else(|_| "[]".to_string());
+
+            sqlx::query(
+                "INSERT INTO user_block_packages (user_id, block_package_id, unused_block_ids, used_block_ids)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT(user_id, block_package_id) DO UPDATE SET
+                     unused_block_ids = excluded.unused_block_ids,
+                     used_block_ids = excluded.used_block_ids"
+            )
+            .bind(user_id)
+            .bind(package_id as i32)
+            .bind(unused_json)
+            .bind(used_json)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    let random_critter_uid: Option<i64> = sqlx::query_scalar(
+        "SELECT uid FROM critters WHERE player_id = ? ORDER BY RANDOM() LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    // Load road infos
+    if let Some(roads) = data.get("roadInfos").and_then(|v| v.as_array()) {
+        for entry in roads {
+            let road_id = entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+            if road_id == 0 {
+                continue;
+            }
+
+            let road_points: Vec<serde_json::Value> = entry
+                .get("roadPoints")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            let road_points_json =
+                serde_json::to_string(&road_points).unwrap_or_else(|_| "[]".to_string());
+
+            // Use random critter UID if one exists and JSON has a critter
+            let json_critter_uid = entry
+                .get("critterUid")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let actual_critter_uid = if json_critter_uid != 0 {
+                random_critter_uid.unwrap_or(0)
+            } else {
+                0
+            };
+
+            sqlx::query(
+                "INSERT INTO user_roads (user_id, id, from_type, to_type, road_points,
+                                         critter_uid, building_uid, building_define_id,
+                                         skin_id, block_clean_type)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id, id) DO UPDATE SET
+                     from_type = excluded.from_type,
+                     to_type = excluded.to_type,
+                     road_points = excluded.road_points,
+                     critter_uid = excluded.critter_uid,
+                     building_uid = excluded.building_uid,
+                     building_define_id = excluded.building_define_id,
+                     skin_id = excluded.skin_id,
+                     block_clean_type = excluded.block_clean_type",
+            )
+            .bind(user_id)
+            .bind(road_id as i32)
+            .bind(entry.get("fromType").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("toType").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(road_points_json)
+            .bind(actual_critter_uid)
+            .bind(
+                entry
+                    .get("buildingUid")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                entry
+                    .get("buildingDefineId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32,
+            )
+            .bind(entry.get("skinId").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(
+                entry
+                    .get("blockCleanType")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32,
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load room state
+    let is_reset = data
+        .get("isReset")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    sqlx::query(
+        "INSERT INTO user_room_state (user_id, is_reset, last_reset_time) VALUES (?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+             is_reset = excluded.is_reset,
+             last_reset_time = excluded.last_reset_time",
+    )
+    .bind(user_id)
+    .bind(is_reset)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    tracing::info!("Loaded room info for user {}", user_id);
     Ok(())
 }
 
@@ -3993,6 +4240,7 @@ pub async fn load_all_starter_data(pool: &SqlitePool, uid: i64) -> sqlx::Result<
     load_activity101_13108(&mut tx, uid).await?;
     load_activity101_12722(&mut tx, uid).await?;
     load_starter_bgm(&mut tx, uid).await?;
+    load_room_info(&mut tx, uid).await?;
 
     tx.commit().await?;
 

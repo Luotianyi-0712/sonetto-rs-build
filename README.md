@@ -1,86 +1,182 @@
-# sonetto-rs
+# Sonetto-rs
 
-## What is sonetto-rs?
+### Current supported version: **3.1 (non-steam)**
 
-sonetto-rs is a ps for reverse 1999 made in rust. why? no one tried and succeeded yet.
+[![Build and Release](https://github.com/Luotianyi-0712/sonetto-rs-build/actions/workflows/rust.yml/badge.svg)](https://github.com/Luotianyi-0712/sonetto-rs-build/actions/workflows/rust.yml)
+
+---
+
+## What is Sonetto-rs?
+
+Sonetto-rs is a Rust implementation of a server emulator (PS) for *Reverse: 1999* (PC version). This project exists because there was never a PS for Reverse: 1999, so we built one.
 
 ![main image](/images/r99-murc.png)
 
-## How to use sonetto-rs?
-- PS was made to use the pc [version](https://re1999.bluepoch.com/) of the game.
-- Clone the repo
-- Install [rust](https://rust-lang.org/tools/install/)
-- Clone [Sonetto-Data](https://gitlab.com/yoncodes/sonetto-data) 
-- Open the project folder for sonetto-rs
-- Add excel2json to the data folder in sonetto-rs
-- open terminal or command prompt in sonetto-rs root directory
+---
+
+## Table of contents
+
+* [Quick start](#quick-start)
+* [Requirements](#requirements)
+* [Features](#features-what-works-now)
+* [Known limitations / Not working (confirmed)](#known-limitations--not-working-confirmed)
+* [Prebuilt binaries](#prebuilt-binaries)
+* [Contributing](#contributing)
+* [Known bugs](#known-bugs)
+* [Plans / Roadmap](#plans--roadmap)
+* [Todo](#todo)
+
+---
+
+## Quick start
+
+> These commands assume a Windows command prompt or PowerShell; adjust paths/commands for Linux/macOS.
+
+1. Clone this repository:
+
+```bash
+git clone https://github.com/Yoshk4e/sonetto-rs.git
+cd sonetto-rs
+```
+
+2. Install Rust: [https://rust-lang.org/tools/install](https://rust-lang.org/tools/install)
+
+3. Clone the required data repository and place it where Sonetto-rs can read it:
+
+```bash
+git clone https://gitlab.com/yoncodes/sonetto-data.git
+```
+
+4. Add `excel2json` to `sonetto-rs/data/` (the project expects an `excel2json` and a `static` folder in the runtime `data` directory).
+
+5. Build the project:
+
 ```bash
 cargo build --release
 ```
 
-- sdkserver and gameserver will be in the target/release directory
-- you can move these two files to another location if you want
-- in the same folder as sdkserver and gameserver make a data folder and copy excel2json and static to it
+6. The built binaries will be in `target/release/`:
 
-- need to use the [sonetto patch](https://github.com/yoncodes/sonetto-patch) to make the game work with the server
-- now open two terminals or command prompts
+* `sdkserver`
+* `gameserver`
+
+Create a `data/` folder next to those binaries and copy `excel2json` and the `static/` folder into it.
+
+7. Apply the client patch so the game talks to your server:
+
+* Use the [sonetto-patch](https://github.com/yoncodes/sonetto-patch) to make the game client compatible.
+
+8. Start the servers (open two terminals):
 
 ```bash
-    .\sdkserver
+./sdkserver
+./gameserver
 ```
-```bash
-    .\gameserver
-```
-- Login with email. **NOT REGISTER** if the account doesn't exist it will be created automatically
+
+9. Login using an email address in the game client (**DO NOT USE THE REGISTER BUTTON**, if the account doesn't exist it will be created automatically).
+
 ![login image](/images/r99-email.png)
 
-## Expectations
-- This is the first release of sonetto-rs, expect bugs and issues. Please report any issues you find.
+---
 
-![heroes image](/images/r99-heroes.png)
+## Requirements
 
-## Features
-Everythings unlocked out the box
-- Self contained (uses Sqlite no db hosting needed)
-- All skins
-- All heroes
-- All Psychubes
-- 3m currency to start
-- Battles work (kinda)
-- Auto battle works
-- Battle replay works
-- Battle teams can be set and saved now
-- Username changes work
-- Users can change the profile heros
-- Users can change Psychubes on heros
-- BGM works (juke box anyone?)
-- Gacha works (80%) (need to add currency logic)
-- Ripple Banner works
-- Standard Banner works
-- Main story now works
+* Rust toolchain (nightly)
+* `sonetto-data` repository (game data files)
+* `excel2json` placed in `data/` alongside `static/`
+* The PC version of *Reverse: 1999* (official client), the server is built for the PC client.
 
+---
 
-## Not working (confirmed)
-- Tower battles
-- Trial heros are bugged (doesn't save in battle replay or load)(not implemented yet)
-- Setting hero talents
-- Achievements
-- Tasks
-- Battle pass
-- Currency logic (soon)
-- Profile picture (soon)
-- Real battle logic (right now we skip battle to the end)
-- Drop rates need to be tested
+## Features (what works now)
 
-## Known Bugs
-- ~~7 day sign is bugged (sometimes rewards are given twice 12 am and 12:30 am) (I blame the game for using 3 different time formats)(u64, i64 and i32 lmao)~~ (fixed)
-- Ezio has max number of moxie its a visual bug (no idea why yet) (normal max is 5 he's showing almost a 100)
+* Self-contained: uses SQLite (no external DB hosting required)
+* All skins, heroes and psychubes unlocked by default
+* Starter currency (3,000,000)
+* Battles and auto-battle (basic)
+* Battle replay support
+* Battle teams: save and load team configurations
+* Username changes
+* Profile hero selection and psychube assignment
+* Background music (BGM / jukebox)
+* Gacha functionality (partial, see limitations)
+* Ripple & Standard banners
+* Main story progression
+* Items can be added to inventory
+* Consumables now work (can choose psychubes, currency, and portraits)
+* Pawnshop works(can buy all items, now gets added to inventory)
+* Fragment shop 
+* Equipment can be locked and unlocked
+* Characters can be marked as favorite
+* Gacha now reduces currency used and converts when low
 
-## Plans for the future
+---
 
-For now I'll just fix the handles that are not working. Then implement a proper system for users to manage their accounts and progress.
-Right now everything is hardcoded to be maxed out which isn't ideal for some people. Eventually we'll add proper currency logic and real battle logic.
+## Known limitations / Not working (confirmed)
+
+* Tower battles
+* Trial heroes (buggy: replay/load not saved), not fully implemented
+* Hero talents aren't persisted or applied correctly
+* Achievements system
+* Tasks / quest systems
+* Battle pass
+* Full currency logic (some gacha/currency flows are incomplete)
+* Profile picture upload/management
+* Real-time battle logic: currently battles may be fast-forwarded/skipped to the end
+* Drop rates and reward balancing need comprehensive testing
+
+---
+
+## Prebuilt binaries
+
+Prebuilt releases are available (thanks to Luotianyi-0712). Check the build repository's Releases page and download the release that matches your client version. Note: compatibility is not guaranteed across every client build, Check the upstream and the date of the build because the build repo syncs with upstream everyday at 2AM UTC.
+
+* Build repo: [https://github.com/Luotianyi-0712/sonetto-rs-build](https://github.com/Luotianyi-0712/sonetto-rs-build)
+
+---
+
+## Contributing
+
+1. Fork this repository.
+2. Create a feature branch (e.g. `feature/cool-thing`).
+3. Make your changes, run `cargo build --release` and test locally.
+4. Open a pull request against the upstream repository with a clear description of your change and any testing notes.
+
+Please follow existing code style and keep changes focused per PR.
+
+---
+
+## Known bugs
+
+* **7-day sign-in**: was giving duplicate rewards at midnight in multiple time formats, *this was fixed*.
+* **Ezio moxie display**: Ezio sometimes shows an incorrect (very large) moxie value; this is a UI/visual bug under investigation.
+* **Month card daily sign-in** sometimes ui pops up twice during sign in
+
+If you encounter other bugs, please open an issue with reproduction steps and relevant logs.
+
+---
+
+## Plans / Roadmap
+
+Short-term:
+
+* Fix confirmed broken handlers and persistence bugs
+* Implement a proper account & progress management system (replace current hardcoded/maxed defaults)
+* Finish currency/gacha logic and balance drops
+* Improve battle logic to match the official game behavior
+
+---
 
 ## Todo
-- remove unnecessary code
-- remove unused static/starter data
+
+* Remove dead / unnecessary code
+* Remove unused static/starter data
+* Improve documentation and setup instructions
+
+---
+
+## Credits
+
+Thanks to the upstream contributors and to Luotianyi-0712 for prebuilt artifacts and CI.
+
+---

@@ -21,7 +21,7 @@ pub async fn on_get_block_package_info(
     };
 
     let reply = GetBlockPackageInfoReply {
-        block_package_ids: packages,
+        block_package_ids: packages.into_iter().map(|p| p.block_package_id).collect(),
         special_blocks: special_blocks.into_iter().map(Into::into).collect(),
     };
 

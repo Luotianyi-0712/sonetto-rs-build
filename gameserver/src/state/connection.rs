@@ -18,6 +18,7 @@ pub struct ConnectionContext {
     pub send_queue: VecDeque<CommandPacket>,
 
     pub player_state: Option<PlayerState>,
+    
     pub logged_in: bool,
 
     next_sequence: u32,
@@ -89,6 +90,7 @@ impl ConnectionContext {
         self.player_state = Some(state);
 
         tracing::info!("Loaded player state for player {}", player_id);
+
         Ok(())
     }
 

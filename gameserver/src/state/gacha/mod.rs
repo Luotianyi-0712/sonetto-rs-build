@@ -4,10 +4,15 @@ use database::models::game::summon::SpPoolInfo;
 
 mod helpers;
 mod result;
+mod rewards;
 mod state;
 
-pub use helpers::{parse_id_list, parse_up_heroes};
+pub use helpers::{
+    get_rewards, parse_dupe_rewards, parse_id_list, parse_item, parse_store_product,
+    parse_up_heroes,
+};
 pub use result::{GachaPool, GachaResult};
+pub use rewards::grant_dupe_rewards;
 pub use state::{BannerType, GachaState, load_gacha_state, save_gacha_state};
 
 pub async fn build_gacha(pool_id: i32, sp_pool_info: Option<&SpPoolInfo>) -> Result<GachaPool> {

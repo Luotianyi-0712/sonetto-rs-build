@@ -3,7 +3,6 @@ use anyhow::Result;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-/// Get all red dots for a player
 pub async fn get_red_dots(pool: &SqlitePool, player_id: i64) -> Result<Vec<RedDotRecord>> {
     let dots = sqlx::query_as::<_, RedDotRecord>(
         "SELECT * FROM red_dots WHERE player_id = ? ORDER BY define_id, info_id",
@@ -14,7 +13,6 @@ pub async fn get_red_dots(pool: &SqlitePool, player_id: i64) -> Result<Vec<RedDo
     Ok(dots)
 }
 
-/// Get red dots filtered by specific define_ids
 pub async fn get_red_dots_by_defines(
     pool: &SqlitePool,
     player_id: i64,
@@ -38,7 +36,6 @@ pub async fn get_red_dots_by_defines(
     Ok(q.fetch_all(pool).await?)
 }
 
-/// Group red dots by define_id
 pub fn group_red_dots(records: Vec<RedDotRecord>) -> Vec<RedDotGroup> {
     let mut grouped: HashMap<i32, Vec<RedDotRecord>> = HashMap::new();
 
@@ -59,7 +56,6 @@ pub fn group_red_dots(records: Vec<RedDotRecord>) -> Vec<RedDotGroup> {
         .collect()
 }
 
-/// Upsert a single red dot
 pub async fn upsert_red_dot(
     pool: &SqlitePool,
     player_id: i64,
@@ -99,7 +95,6 @@ pub async fn upsert_red_dot(
     Ok(())
 }
 
-/// Clear all red dots for a specific define_id
 pub async fn clear_red_dots_by_define(
     pool: &SqlitePool,
     player_id: i64,
@@ -113,7 +108,6 @@ pub async fn clear_red_dots_by_define(
     Ok(())
 }
 
-/// Clear all red dots for a player
 pub async fn clear_all_red_dots(pool: &SqlitePool, player_id: i64) -> Result<()> {
     sqlx::query("DELETE FROM red_dots WHERE player_id = ?")
         .bind(player_id)

@@ -27,8 +27,6 @@ pub async fn on_summon_query_token(
 
     send_red_dot_push(Arc::clone(&ctx), player_id, Some(vec![1908])).await?;
 
-    tracing::info!("before send_reply");
-
     {
         let mut ctx_guard = ctx.lock().await;
         let reply = SummonQueryTokenReply {
@@ -39,8 +37,6 @@ pub async fn on_summon_query_token(
             .send_reply(CmdId::SummonQueryTokenCmd, reply, 0, req.up_tag)
             .await?;
     }
-
-    tracing::info!("after send_reply");
 
     Ok(())
 }

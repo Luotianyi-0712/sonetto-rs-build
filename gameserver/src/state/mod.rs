@@ -12,11 +12,12 @@ pub use battle::{
     generate_auto_opers, generate_initial_deck, rewards::generate_dungeon_rewards,
     simulator::BattleSimulator,
 };
-
 pub use connection::ActiveBattle;
 pub use connection::ConnectionContext;
 pub use gacha::{
-    BannerType, GachaResult, GachaState, build_gacha, load_gacha_state, save_gacha_state,
+    BannerType, GachaResult, GachaState, build_gacha, get_rewards, grant_dupe_rewards,
+    load_gacha_state, parse_item, parse_store_product, save_gacha_state,
 };
+
 pub use packet::CommandPacket;
 pub use player::PlayerState;

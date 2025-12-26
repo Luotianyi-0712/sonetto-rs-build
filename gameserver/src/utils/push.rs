@@ -1,8 +1,9 @@
 use crate::error::AppError;
 use crate::state::ConnectionContext;
-use database::db::game::{items, red_dots};
+use database::db::game::{currencies, items, red_dots};
 use sonettobuf::{
-    CmdId, EndDungeonPush, ItemChangePush, MaterialChangePush, MaterialData, UpdateRedDotPush,
+    CmdId, CurrencyChangePush, EndDungeonPush, ItemChangePush, MaterialChangePush, MaterialData,
+    UpdateRedDotPush,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -81,6 +82,72 @@ pub async fn send_item_change_push(
             push.items.len(),
             push.power_items.len(),
             push.insight_items.len()
+        );
+    }
+
+    Ok(())
+}
+
+pub async fn send_currency_change_push(
+    ctx: Arc<Mutex<ConnectionContext>>,
+    user_id: i64,
+    changed_currencies: Vec<(i32, i32)>,
+) -> Result<(), AppError> {
+    if changed_currencies.is_empty() {
+        return Ok(());
+    }
+
+    let mut totals: std::collections::HashMap<i32, i32> = std::collections::HashMap::new();
+    for (currency_id, amount) in &changed_currencies {
+        *totals.entry(*currency_id).or_insert(0) += amount;
+    }
+
+    let currencies_list = {
+        let ctx_guard = ctx.lock().await;
+        let pool = &ctx_guard.state.db;
+
+        let currency_ids: Vec<i32> = totals.keys().copied().collect();
+        let mut currencies = Vec::new();
+        for currency_id in currency_ids {
+            if let Some(currency) = currencies::get_currency(pool, user_id, currency_id).await? {
+                currencies.push(currency);
+            }
+        }
+
+        currencies
+    };
+
+    if !currencies_list.is_empty() {
+        let mut ctx_guard = ctx.lock().await;
+
+        let mut details: Vec<String> = totals
+            .iter()
+            .map(|(id, total)| format!("{}x{}", id, total))
+            .collect();
+        details.sort();
+
+        let push = CurrencyChangePush {
+            change_currency: currencies_list
+                .clone()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        };
+
+        ctx_guard
+            .send_push(CmdId::CurrencyChangePushCmd, push)
+            .await?;
+
+        tracing::info!(
+            "Sent CurrencyChangePush to user {}: {} currencies [{}] (added: {})",
+            user_id,
+            totals.len(),
+            currencies_list
+                .iter()
+                .map(|c| format!("{}x{}", c.currency_id, c.quantity))
+                .collect::<Vec<_>>()
+                .join(", "),
+            details.join(", ")
         );
     }
 
@@ -210,6 +277,69 @@ pub async fn send_dungeon_update_push(
     ctx_guard
         .send_push(CmdId::DungeonUpdatePushCmd, push)
         .await?;
+
+    Ok(())
+}
+
+pub async fn send_equip_update_push(
+    ctx: Arc<Mutex<ConnectionContext>>,
+    user_id: i64,
+    equip_ids: Vec<i32>,
+) -> Result<(), AppError> {
+    if equip_ids.is_empty() {
+        return Ok(());
+    }
+
+    let equips = {
+        let ctx_guard = ctx.lock().await;
+        let pool = &ctx_guard.state.db;
+
+        let mut all_equips = Vec::new();
+
+        for equip_id in equip_ids {
+            let equips: Vec<database::models::game::equipment::Equipment> = sqlx::query_as(
+                "SELECT uid, user_id, equip_id, level, exp, break_lv, count, is_lock, refine_lv, created_at, updated_at
+                 FROM equipment
+                 WHERE user_id = ? AND equip_id = ?
+                 ORDER BY uid"
+            )
+            .bind(user_id)
+            .bind(equip_id)
+            .fetch_all(pool)
+            .await?;
+
+            all_equips.extend(equips);
+        }
+
+        all_equips
+    };
+
+    let push = sonettobuf::EquipUpdatePush {
+        equips: equips
+            .into_iter()
+            .map(|e| sonettobuf::Equip {
+                equip_id: Some(e.equip_id),
+                uid: Some(e.uid),
+                level: Some(e.level),
+                exp: Some(e.exp),
+                break_lv: Some(e.break_lv),
+                count: Some(e.count),
+                is_lock: Some(e.is_lock),
+                refine_lv: Some(e.refine_lv),
+            })
+            .collect(),
+    };
+
+    let mut ctx_guard = ctx.lock().await;
+    ctx_guard
+        .send_push(CmdId::EquipUpdatePushCmd, push.clone())
+        .await?;
+
+    tracing::info!(
+        "Sent EquipUpdatePush to user {}: {} equipment items",
+        user_id,
+        push.equips.len()
+    );
 
     Ok(())
 }

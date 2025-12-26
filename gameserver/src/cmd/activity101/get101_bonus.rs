@@ -1,6 +1,12 @@
 use crate::packet::ClientPacket;
 use crate::state::ConnectionContext;
-use crate::{error::AppError, utils::push};
+use crate::{
+    error::AppError,
+    utils::{
+        inventory::{add_currencies, add_items},
+        push,
+    },
+};
 use database::db::game::activity101;
 use prost::Message;
 use sonettobuf::{CmdId, Get101BonusReply, Get101BonusRequest};
@@ -86,7 +92,6 @@ pub async fn on_get101_bonus(
         return Ok(());
     }
 
-    // Claim the reward
     activity101::claim_activity101_day(&pool, player_id, activity_id, day_id as i32).await?;
 
     {
@@ -102,21 +107,8 @@ pub async fn on_get101_bonus(
     let item_rewards = vec![(140001_u32, 1_i32)]; // (item_id, quantity)
     let currency_rewards = vec![];
 
-    // Add items to inventory
-    let mut changed_item_ids = Vec::new();
-    for (item_id, quantity) in &item_rewards {
-        database::db::game::items::add_item_quantity(&pool, player_id, *item_id as u32, *quantity)
-            .await?;
-        changed_item_ids.push(*item_id as u32);
-    }
-
-    // Add currencies
-    let mut changed_currency_ids = Vec::new();
-    for (currency_id, amount) in &currency_rewards {
-        database::db::game::currencies::add_currency(&pool, player_id, *currency_id, *amount)
-            .await?;
-        changed_currency_ids.push(*currency_id);
-    }
+    let changed_item_ids = add_items(&pool, player_id, &item_rewards).await?;
+    let changed_currency_ids = add_currencies(&pool, player_id, &currency_rewards).await?;
 
     tracing::info!(
         "User {} claimed day {} for activity {}: {} items, {} currencies",

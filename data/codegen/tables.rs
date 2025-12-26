@@ -32,4 +32,5 @@ pub const FILTER_TABLES: &[&str] = &[
     "bgm_switch",
     "bonus",
     "hero_trial",
+    "store_goods",
 ];

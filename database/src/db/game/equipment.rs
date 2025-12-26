@@ -16,41 +16,6 @@ pub async fn get_user_equipment(pool: &SqlitePool, user_id: i64) -> Result<Vec<E
     Ok(equipment)
 }
 
-/// Create equipment for user
-pub async fn create_equipment(
-    pool: &SqlitePool,
-    uid: i64,
-    user_id: i64,
-    equip_id: i32,
-    level: i32,
-    break_lv: i32,
-    refine_lv: i32,
-    now: i64,
-) -> Result<()> {
-    sqlx::query(
-        r#"
-        INSERT INTO equipment (
-            uid, user_id, equip_id, level, exp, break_lv, count, is_lock, refine_lv, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        "#,
-    )
-    .bind(uid)
-    .bind(user_id)
-    .bind(equip_id)
-    .bind(level)
-    .bind(0) // exp
-    .bind(break_lv)
-    .bind(1) // count
-    .bind(false) // is_lock
-    .bind(refine_lv)
-    .bind(now)
-    .bind(now)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
 pub async fn get_hero_default_equip_id(
     pool: &SqlitePool,
     hero_uid: i64,
@@ -93,6 +58,28 @@ pub async fn get_equipment_by_uid(
     Ok(equip)
 }
 
+pub async fn update_equipment_lock(
+    pool: &SqlitePool,
+    user_id: i64,
+    uid: i64,
+    is_lock: bool,
+) -> Result<bool> {
+    let now = common::time::ServerTime::now_ms();
+
+    let rows_affected = sqlx::query(
+        "UPDATE equipment SET is_lock = ?, updated_at = ? WHERE uid = ? AND user_id = ?",
+    )
+    .bind(is_lock)
+    .bind(now)
+    .bind(uid)
+    .bind(user_id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    Ok(rows_affected > 0)
+}
+
 pub async fn build_equip_records(
     pool: &SqlitePool,
     player_id: i64,
@@ -113,7 +100,6 @@ pub async fn build_equip_records(
                 continue;
             }
 
-            // Load equipment details
             if let Ok(equip_data) = get_equipment_by_uid(pool, player_id, equip_uid).await {
                 records.push(sonettobuf::EquipRecord {
                     equip_uid: Some(equip_uid),
@@ -131,4 +117,82 @@ pub async fn build_equip_records(
     }
 
     Ok(equip_records)
+}
+
+pub async fn add_equipment(
+    pool: &SqlitePool,
+    user_id: i64,
+    equip_id: i32,
+    count: i32,
+) -> Result<Vec<i32>> {
+    let now = common::time::ServerTime::now_ms();
+    let game_data = data::exceldb::get();
+    let equip_cfg = game_data
+        .equip
+        .get(equip_id)
+        .ok_or_else(|| anyhow::anyhow!("Equipment {} not found", equip_id))?;
+
+    let (level, break_lv, refine_lv, is_lock) = match equip_cfg.rare {
+        5 => (1, 0, 0, true),  // SSR: Level 1, locked
+        4 => (1, 0, 0, true),  // SR: locked
+        _ => (1, 0, 0, false), // Others: not locked
+    };
+
+    // Get last UID
+    let last_uid: Option<i64> =
+        sqlx::query_scalar("SELECT MAX(uid) FROM equipment WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await?
+            .flatten();
+
+    let new_uid = last_uid.map(|uid| uid + 1).unwrap_or(30000000);
+
+    // Create new equipment instance (count is stored in this single row)
+    sqlx::query(
+        "INSERT INTO equipment (uid, user_id, equip_id, level, exp, break_lv, count, is_lock, refine_lv, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(new_uid)
+    .bind(user_id)
+    .bind(equip_id)
+    .bind(level)
+    .bind(0) // exp
+    .bind(break_lv)
+    .bind(count)
+    .bind(is_lock)
+    .bind(refine_lv)
+    .bind(now)
+    .bind(now)
+    .execute(pool)
+    .await?;
+
+    Ok(vec![equip_id])
+}
+
+/// Get total count of equipment by equip_id (counts all matching rows)
+pub async fn get_equipment_count(pool: &SqlitePool, user_id: i64, equip_id: i32) -> Result<i32> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM equipment WHERE user_id = ? AND equip_id = ?")
+            .bind(user_id)
+            .bind(equip_id)
+            .fetch_one(pool)
+            .await?;
+
+    Ok(count as i32)
+}
+
+pub async fn add_equipments(
+    pool: &SqlitePool,
+    user_id: i64,
+    equips: &[(i32, i32)],
+) -> Result<Vec<i32>> {
+    let mut changed_ids = Vec::new();
+
+    for (equip_id, count) in equips {
+        let ids = add_equipment(pool, user_id, *equip_id, *count).await?;
+        changed_ids.extend(ids);
+    }
+
+    Ok(changed_ids)
 }

@@ -225,3 +225,86 @@ pub async fn update_sp_pool_up_heroes(
 
     Ok(())
 }
+
+pub async fn use_discount(pool: &SqlitePool, user_id: i64, pool_id: i32) -> Result<()> {
+    let now = common::time::ServerTime::now_ms();
+
+    sqlx::query(
+        "UPDATE user_summon_pools
+         SET discount_time = discount_time - 1, updated_at = ?
+         WHERE user_id = ? AND pool_id = ? AND discount_time > 0",
+    )
+    .bind(now)
+    .bind(user_id)
+    .bind(pool_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn increment_summon_count(
+    pool: &SqlitePool,
+    user_id: i64,
+    pool_id: i32,
+    count: i32,
+) -> Result<()> {
+    let now = common::time::ServerTime::now_ms();
+
+    let game_data = data::exceldb::get();
+    let summon_pool = game_data
+        .summon_pool
+        .iter()
+        .find(|p| p.id == pool_id)
+        .ok_or_else(|| anyhow::anyhow!("Summon pool {} not found", pool_id))?;
+
+    let pool_type = summon_pool.r#type;
+
+    if pool_type == 3 {
+        let type_3_pool_ids: Vec<i32> = game_data
+            .summon_pool
+            .iter()
+            .filter(|p| p.r#type == 3)
+            .map(|p| p.id)
+            .collect();
+
+        for type_3_pool_id in type_3_pool_ids {
+            sqlx::query(
+                "INSERT INTO user_summon_pools (user_id, pool_id, offline_time, summon_count, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id, pool_id) DO UPDATE SET
+                     summon_count = summon_count + ?,
+                     updated_at = ?",
+            )
+            .bind(user_id)
+            .bind(type_3_pool_id)
+            .bind(1750327199)
+            .bind(count)
+            .bind(now)
+            .bind(now)
+            .bind(count)
+            .bind(now)
+            .execute(pool)
+            .await?;
+        }
+    } else {
+        sqlx::query(
+            "INSERT INTO user_summon_pools (user_id, pool_id, summon_count, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(user_id, pool_id) DO UPDATE SET
+                 summon_count = summon_count + ?,
+                 updated_at = ?",
+        )
+        .bind(user_id)
+        .bind(pool_id)
+        .bind(count)
+        .bind(now)
+        .bind(now)
+        .bind(count)
+        .bind(now)
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
+}

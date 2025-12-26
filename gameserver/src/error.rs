@@ -34,6 +34,12 @@ pub enum AppError {
 
     #[error("Hero not found")]
     HeroNotFound,
+
+    #[error("Insufficient items")]
+    InsufficientItems,
+
+    #[error("Insufficient funds")]
+    InsufficientCurrency,
 }
 
 impl From<std::str::Utf8Error> for AppError {

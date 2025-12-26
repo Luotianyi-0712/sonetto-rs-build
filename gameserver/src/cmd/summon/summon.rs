@@ -1,12 +1,19 @@
 use crate::error::AppError;
 use crate::packet::ClientPacket;
 use crate::state::{
-    BannerType, ConnectionContext, GachaResult, GachaState, build_gacha, load_gacha_state,
-    save_gacha_state,
+    BannerType, ConnectionContext, GachaResult, GachaState, build_gacha, grant_dupe_rewards,
+    load_gacha_state, save_gacha_state,
+};
+use crate::utils::{
+    inventory::{add_currencies, add_items},
+    push,
 };
 use data::exceldb;
-use database::db::game::heroes::{add_hero_duplicate, create_hero, has_hero};
-use database::db::game::summon::{add_summon_history, get_sp_pool_info};
+use database::db::game::{
+    heroes::{add_hero_duplicate, create_hero, has_hero},
+    summon::{add_summon_history, get_sp_pool_info},
+};
+
 use prost::Message;
 use rand::thread_rng;
 
@@ -33,6 +40,126 @@ pub async fn on_summon(
         )
     };
 
+    let game_data = exceldb::get();
+    let summon_pool = game_data
+        .summon_pool
+        .iter()
+        .find(|p| p.id == pool_id)
+        .ok_or(AppError::InvalidRequest)?;
+
+    let is_discounted = if count == 10 {
+        let pool_info: Option<(i32,)> = sqlx::query_as(
+            "SELECT discount_time FROM user_summon_pools WHERE user_id = ? AND pool_id = ?",
+        )
+        .bind(user_id)
+        .bind(pool_id)
+        .fetch_optional(&db)
+        .await?;
+
+        pool_info
+            .map(|(discount_time,)| discount_time > 0)
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    let cost_str = if is_discounted && !summon_pool.discount_cost10.is_empty() {
+        &summon_pool.discount_cost10
+    } else if count == 10 {
+        &summon_pool.cost10
+    } else {
+        &summon_pool.cost1
+    };
+
+    let cost_options: Vec<&str> = cost_str.split('|').collect();
+
+    let mut selected_items = Vec::new();
+    let mut selected_currencies = Vec::new();
+
+    for option in &cost_options {
+        let (items, currencies, _, _) = crate::state::parse_store_product(option);
+
+        let mut can_afford = true;
+        for (item_id, amount) in &items {
+            let current = database::db::game::items::get_item(&db, user_id, *item_id)
+                .await?
+                .map(|i| i.quantity)
+                .unwrap_or(0);
+            if current < *amount {
+                can_afford = false;
+                break;
+            }
+        }
+
+        if can_afford {
+            selected_items = items;
+            selected_currencies = currencies;
+            break;
+        }
+    }
+
+    if selected_items.is_empty() {
+        let (items, currencies, _, _) =
+            crate::state::parse_store_product(cost_options.last().unwrap());
+        selected_items = items;
+        selected_currencies = currencies;
+    }
+
+    let mut actual_cost_items = Vec::new();
+    let mut actual_cost_currencies = selected_currencies.clone();
+    let mut tickets_converted = 0;
+
+    for (item_id, amount) in &selected_items {
+        let current = database::db::game::items::get_item(&db, user_id, *item_id)
+            .await?
+            .map(|i| i.quantity)
+            .unwrap_or(0);
+
+        if current >= *amount {
+            actual_cost_items.push((*item_id, *amount));
+        } else if *item_id == 140001 {
+            let tickets_to_use = current;
+            let shortage = *amount - current;
+            let currency_needed = shortage * 180;
+
+            let currency_balance = database::db::game::currencies::get_currency(&db, user_id, 2)
+                .await?
+                .map(|c| c.quantity)
+                .unwrap_or(0);
+
+            if currency_balance < currency_needed {
+                return Err(AppError::InsufficientCurrency);
+            }
+
+            if tickets_to_use > 0 {
+                actual_cost_items.push((*item_id, tickets_to_use));
+            }
+
+            actual_cost_currencies.push((2, currency_needed));
+            tickets_converted = shortage;
+        } else {
+            return Err(AppError::InsufficientItems);
+        }
+    }
+
+    let needs_conversion = tickets_converted > 0;
+
+    if needs_conversion {
+        push::send_item_change_push(ctx.clone(), user_id, vec![140001]).await?;
+    }
+
+    {
+        for (item_id, amount) in &actual_cost_items {
+            database::db::game::items::remove_item_quantity(&db, user_id, *item_id, *amount)
+                .await?;
+        }
+
+        for (currency_id, amount) in &actual_cost_currencies {
+            database::db::game::currencies::remove_currency(&db, user_id, *currency_id, *amount)
+                .await?;
+        }
+    }
+
     let sp_pool_info = get_sp_pool_info(&db, user_id, pool_id).await?;
 
     let banner_type = match &sp_pool_info {
@@ -58,6 +185,8 @@ pub async fn on_summon(
     };
 
     let mut reply_results = Vec::with_capacity(gacha_results.len());
+    let mut all_changed_item_ids = Vec::new();
+    let mut all_changed_currencies = Vec::new();
 
     for result in gacha_results {
         match result {
@@ -73,6 +202,19 @@ pub async fn on_summon(
                     create_hero(&db, user_id, hero_id).await?;
                     (true, 0)
                 };
+
+                let (item_rewards, currency_rewards) =
+                    grant_dupe_rewards(hero_id, duplicate_count).await?;
+
+                if !item_rewards.is_empty() {
+                    let item_ids = add_items(&db, user_id, &item_rewards).await?;
+                    all_changed_item_ids.extend(item_ids);
+                }
+
+                if !currency_rewards.is_empty() {
+                    let currency_changes = add_currencies(&db, user_id, &currency_rewards).await?;
+                    all_changed_currencies.extend(currency_changes);
+                }
 
                 reply_results.push(SummonResult {
                     hero_id: Some(hero_id),
@@ -98,12 +240,31 @@ pub async fn on_summon(
 
     save_gacha_state(&db, user_id, pool_id, &gacha).await?;
 
-    let game_data = exceldb::get();
-    let summon_pool = game_data
-        .summon_pool
-        .iter()
-        .find(|p| p.id == pool_id)
-        .ok_or(AppError::InvalidRequest)?;
+    if is_discounted {
+        database::db::game::summon::use_discount(&db, user_id, pool_id).await?;
+    }
+
+    if let Err(e) =
+        database::db::game::summon::increment_summon_count(&db, user_id, pool_id, count).await
+    {
+        tracing::warn!("Failed to increment summon count: {}", e);
+    }
+
+    all_changed_item_ids.extend(actual_cost_items.iter().map(|(id, _)| *id));
+
+    if !all_changed_item_ids.is_empty() {
+        push::send_item_change_push(ctx.clone(), user_id, all_changed_item_ids).await?;
+    }
+
+    if !all_changed_currencies.is_empty() || !actual_cost_currencies.is_empty() {
+        all_changed_currencies.extend(actual_cost_currencies.iter().map(|(id, _)| (*id, 0)));
+        push::send_currency_change_push(ctx.clone(), user_id, all_changed_currencies).await?;
+    }
+
+    /*if needs_conversion {
+        let material_changes = vec![(1, 140001, tickets_converted)];
+        push::send_material_change_push(ctx.clone(), material_changes, Some(25)).await?;
+    }*/
 
     let summon_type = if count == 10 { 2 } else { 1 };
 

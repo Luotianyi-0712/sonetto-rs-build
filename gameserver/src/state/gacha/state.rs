@@ -71,14 +71,34 @@ impl GachaState {
                 }
 
                 BannerType::Ripple => {
-                    self.up_guaranteed = false;
+                    let has_up = !pool.six_up.is_empty();
 
-                    let hero_id = *pool
-                        .six_up
-                        .choose(rng)
-                        .expect("Ripple banner requires at least one UP hero");
+                    let is_up = if has_up {
+                        if self.up_guaranteed {
+                            self.up_guaranteed = false;
+                            true
+                        } else {
+                            let hit = rng.gen_bool(0.5);
+                            if !hit {
+                                self.up_guaranteed = true;
+                            }
+                            hit
+                        }
+                    } else {
+                        self.up_guaranteed = false;
+                        false
+                    };
 
-                    (hero_id, true)
+                    let hero_id = if is_up {
+                        *pool
+                            .six_up
+                            .choose(rng)
+                            .expect("Ripple requires at least one UP hero")
+                    } else {
+                        *pool.six_normal.choose(rng).expect("six_normal empty")
+                    };
+
+                    (hero_id, is_up)
                 }
             };
 
