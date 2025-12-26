@@ -1,0 +1,69 @@
+name: Sync and Build from Upstream
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Check daily at 2 AM UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.sync.outputs.has_changes }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync from upstream
+        id: sync
+        run: |
+          git remote add upstream https://github.com/Yoshk4e/sonetto-rs.git || true
+          git fetch upstream
+          
+          # Get current commit
+          CURRENT=$(git rev-parse HEAD)
+          
+          # Try to merge from main or master
+          if git merge upstream/main --no-edit 2>/dev/null || git merge upstream/master --no-edit 2>/dev/null; then
+            NEW=$(git rev-parse HEAD)
+            
+            if [ "$CURRENT" != "$NEW" ]; then
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              git push origin HEAD:${{ github.ref_name }}
+              echo "✅ Synced new changes from upstream"
+            else
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "ℹ️ No new changes from upstream"
+              exit 0
+            fi
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Merge conflict or no upstream branch found"
+            exit 0
+          fi
+
+  build:
+    needs: sync
+    if: needs.sync.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger build workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build.yml',
+              ref: context.ref
+            })
