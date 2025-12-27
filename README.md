@@ -10,8 +10,7 @@ Download latest build from [releases page](https://github.com/Luotianyi-0712/son
 
 - sdkserver and gameserver will be in the target/release directory
 - you can move these two files to another location if you want
-- in the same folder as sdkserver and gameserver make a data folder and copy excel2json and static to it
-
+- in the same folder as sdkserver and gameserver make a [data](https://gitlab.com/yoncodes/sonetto-data) folder（`data/`） next to those binaries and copy `excel2json` and the `static/` folder into it.
 - need to use the [sonetto patch](https://github.com/yoncodes/sonetto-patch) to make the game work with the server
 - now open two terminals or command prompts
 
