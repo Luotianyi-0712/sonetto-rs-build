@@ -34,6 +34,9 @@ pub async fn on_send_msg(
     let now = common::time::ServerTime::now_ms() as u64;
     let mut messages = Vec::new();
 
+    // game expects the message to be in a specific order or else it fails
+    // also since this message is for bot usage only we only make it exists in the current session
+    // ig resets every time you log in
     let (player_msg_id, bot_msg_id) = {
         let mut ctx_guard = ctx.lock().await;
         let base = ctx_guard.bot_msg_counter;

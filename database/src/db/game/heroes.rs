@@ -542,7 +542,7 @@ pub async fn create_hero(pool: &SqlitePool, user_id: i64, hero_id: i32) -> sqlx:
         .iter()
         .filter(|s| s.character_id != 0)
         .filter(|s| s.character_id == hero_id)
-        .max_by_key(|s| s.id)
+        .min_by_key(|s| s.id)
         .map(|s| s.id)
         .unwrap_or(hero_skin);
 
@@ -621,13 +621,13 @@ pub async fn create_hero(pool: &SqlitePool, user_id: i64, hero_id: i32) -> sqlx:
     };
 
     // Get talent data
-    let min_talent_id = game_data
+    let starting_talent = game_data
         .character_talent
         .iter()
-        .filter(|t| t.hero_id == hero_id)
+        .filter(|t| t.hero_id == hero_id && t.talent_id == 1)
         .map(|t| t.talent_id)
-        .min()
-        .unwrap_or(0);
+        .next()
+        .unwrap_or(1);
 
     // Insert main hero record (NOT MAXED OUT, no equipment)
     sqlx::query(
@@ -659,15 +659,15 @@ pub async fn create_hero(pool: &SqlitePool, user_id: i64, hero_id: i32) -> sqlx:
     .bind(min_rank) // Starting rank (not max)
     .bind(0) // No breakthrough
     .bind(default_skin)
-    .bind(100) // Starting faith (not max)
+    .bind(10400) // Starting faith
     .bind(1) // Active skill level 1
-    .bind(1) // Ex skill level 1
+    .bind(0) // Ex skill level 0
     .bind(true) // is_new (true for new heroes)
-    .bind(min_talent_id) // talent
+    .bind(starting_talent) // talent
     .bind(0) // default_equip_uid = 0 (NO EQUIPMENT)
     .bind(0) // duplicate_count (starting at 0)
     .bind(1) // use_talent_template_id
-    .bind(0) // talent_style_unlock (none initially)
+    .bind(1) // talent_style_unlock
     .bind(0) // talent_style_red
     .bind(false) // is_favor
     .bind(destiny_rank) // destiny_rank (0)
@@ -777,7 +777,7 @@ pub async fn create_hero(pool: &SqlitePool, user_id: i64, hero_id: i32) -> sqlx:
     .execute(pool)
     .await?;
 
-    // Insert destiny stone unlocks (empty initially - player needs to unlock)
+    // Insert destiny stone unlocks
     if let Some(destiny_data) = destiny_data {
         for stone_str in destiny_data.facets_id.split('#') {
             if let Ok(stone_id) = stone_str.parse::<i32>() {
@@ -792,19 +792,112 @@ pub async fn create_hero(pool: &SqlitePool, user_id: i64, hero_id: i32) -> sqlx:
         }
     }
 
-    // Insert talent templates (empty initially)
+    let talent_config = game_data
+        .character_talent
+        .iter()
+        .find(|t| t.hero_id == hero_id && t.talent_id == 1);
+
+    if let Some(talent) = talent_config {
+        let talent_scheme = game_data
+            .talent_scheme
+            .iter()
+            .find(|s| s.talent_id == talent.talent_id && s.talent_mould == talent.talent_mould);
+
+        if let Some(scheme) = talent_scheme {
+            let cubes: Vec<(i32, i32, i32, i32)> = scheme
+                .talen_scheme
+                .split('#')
+                .filter_map(|cube_str| {
+                    let parts: Vec<&str> = cube_str.split(',').collect();
+                    if parts.len() == 4 {
+                        let cube_id = parts[0].parse::<i32>().ok()?;
+                        let direction = parts[1].parse::<i32>().ok()?;
+                        let pos_x = parts[2].parse::<i32>().ok()?;
+                        let pos_y = parts[3].parse::<i32>().ok()?;
+                        Some((cube_id, direction, pos_x, pos_y))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            for (cube_id, direction, pos_x, pos_y) in &cubes {
+                sqlx::query(
+                    "INSERT INTO hero_talent_cubes (hero_uid, cube_id, direction, pos_x, pos_y) VALUES (?, ?, ?, ?, ?)"
+                )
+                .bind(hero_uid)
+                .bind(cube_id)
+                .bind(direction)
+                .bind(pos_x)
+                .bind(pos_y)
+                .execute(pool)
+                .await?;
+            }
+
+            tracing::info!(
+                "Inserted {} talent cubes for hero {} talent 1",
+                cubes.len(),
+                hero_id
+            );
+        }
+    }
+
+    // Insert talent templates
     for template_id in 1..=4 {
-        sqlx::query(
+        let result = sqlx::query(
             "INSERT INTO hero_talent_templates (hero_uid, template_id, name, style) VALUES (?, ?, ?, ?)"
         )
         .bind(hero_uid)
         .bind(template_id)
-        .bind("") // Empty name
-        .bind(0) // Style 0
+        .bind("")
+        .bind(0)
         .execute(pool)
         .await?;
-    }
 
+        let template_row_id = result.last_insert_rowid();
+
+        // Template #1 gets the same cubes as active (saved preset)
+        if template_id == 1 && talent_config.is_some() {
+            if let Some(talent) = talent_config {
+                let talent_scheme = game_data.talent_scheme.iter().find(|s| {
+                    s.talent_id == talent.talent_id && s.talent_mould == talent.talent_mould
+                });
+
+                if let Some(scheme) = talent_scheme {
+                    let cubes: Vec<(i32, i32, i32, i32)> = scheme
+                        .talen_scheme
+                        .split('#')
+                        .filter_map(|cube_str| {
+                            let parts: Vec<&str> = cube_str.split(',').collect();
+                            if parts.len() == 4 {
+                                Some((
+                                    parts[0].parse().ok()?,
+                                    parts[1].parse().ok()?,
+                                    parts[2].parse().ok()?,
+                                    parts[3].parse().ok()?,
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    for (cube_id, direction, pos_x, pos_y) in &cubes {
+                        sqlx::query(
+                            "INSERT INTO hero_talent_template_cubes (template_row_id, cube_id, direction, pos_x, pos_y) VALUES (?, ?, ?, ?, ?)"
+                        )
+                        .bind(template_row_id)
+                        .bind(cube_id)
+                        .bind(direction)
+                        .bind(pos_x)
+                        .bind(pos_y)
+                        .execute(pool)
+                        .await?;
+                    }
+                }
+            }
+        }
+    }
     // Update player info hero count based on rarity
     update_player_hero_count(pool, user_id, rare, now).await?;
 

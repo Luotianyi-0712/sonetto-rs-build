@@ -250,7 +250,6 @@ pub async fn increment_summon_count(
     count: i32,
 ) -> Result<()> {
     let now = common::time::ServerTime::now_ms();
-
     let game_data = data::exceldb::get();
     let summon_pool = game_data
         .summon_pool
@@ -268,13 +267,15 @@ pub async fn increment_summon_count(
             .map(|p| p.id)
             .collect();
 
+        let mut tx = pool.begin().await?;
+
         for type_3_pool_id in type_3_pool_ids {
             sqlx::query(
                 "INSERT INTO user_summon_pools (user_id, pool_id, offline_time, summon_count, created_at, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?)
                  ON CONFLICT(user_id, pool_id) DO UPDATE SET
                      summon_count = summon_count + ?,
-                     updated_at = ?",
+                     updated_at = ?"
             )
             .bind(user_id)
             .bind(type_3_pool_id)
@@ -284,9 +285,11 @@ pub async fn increment_summon_count(
             .bind(now)
             .bind(count)
             .bind(now)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
         }
+
+        tx.commit().await?;
     } else {
         sqlx::query(
             "INSERT INTO user_summon_pools (user_id, pool_id, summon_count, created_at, updated_at)

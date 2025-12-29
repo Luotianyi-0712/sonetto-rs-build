@@ -11,6 +11,7 @@ pub async fn on_delete_offline_msg(
 ) -> Result<(), AppError> {
     let reply = DeleteOfflineMsgReply {};
 
+    // Honestly not sure if this is needed here but leave it for now
     let push = ChatMsgPush { msg: vec![] };
 
     {

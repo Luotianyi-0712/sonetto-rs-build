@@ -6,6 +6,7 @@ pub mod bgm_switch;
 pub mod bonus;
 pub mod chapter;
 pub mod character;
+pub mod character_cosume;
 pub mod character_destiny;
 pub mod character_level;
 pub mod character_rank;
@@ -34,6 +35,7 @@ pub mod store_goods;
 pub mod summon;
 pub mod summon_pool;
 pub mod talent_scheme;
+pub mod talent_style_cost;
 
 use std::sync::OnceLock;
 
@@ -44,6 +46,7 @@ pub struct GameDB {
     pub bonus: bonus::BonusTable,
     pub chapter: chapter::ChapterTable,
     pub character: character::CharacterTable,
+    pub character_cosume: character_cosume::CharacterCosumeTable,
     pub character_destiny: character_destiny::CharacterDestinyTable,
     pub character_level: character_level::CharacterLevelTable,
     pub character_rank: character_rank::CharacterRankTable,
@@ -72,6 +75,7 @@ pub struct GameDB {
     pub summon: summon::SummonTable,
     pub summon_pool: summon_pool::SummonPoolTable,
     pub talent_scheme: talent_scheme::TalentSchemeTable,
+    pub talent_style_cost: talent_style_cost::TalentStyleCostTable,
 }
 
 impl GameDB {
@@ -94,6 +98,9 @@ impl GameDB {
         let character = character::CharacterTable::load(
             &format!("{}/character.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load character.json: {}", e))?;
+        let character_cosume = character_cosume::CharacterCosumeTable::load(
+            &format!("{}/character_cosume.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load character_cosume.json: {}", e))?;
         let character_destiny = character_destiny::CharacterDestinyTable::load(
             &format!("{}/character_destiny.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load character_destiny.json: {}", e))?;
@@ -178,6 +185,9 @@ impl GameDB {
         let talent_scheme = talent_scheme::TalentSchemeTable::load(
             &format!("{}/talent_scheme.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load talent_scheme.json: {}", e))?;
+        let talent_style_cost = talent_style_cost::TalentStyleCostTable::load(
+            &format!("{}/talent_style_cost.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load talent_style_cost.json: {}", e))?;
 
         Ok(Self {
             antique,
@@ -186,6 +196,7 @@ impl GameDB {
             bonus,
             chapter,
             character,
+            character_cosume,
             character_destiny,
             character_level,
             character_rank,
@@ -214,6 +225,7 @@ impl GameDB {
             summon,
             summon_pool,
             talent_scheme,
+            talent_style_cost,
         })
     }
 

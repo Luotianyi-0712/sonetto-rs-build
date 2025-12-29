@@ -187,6 +187,7 @@ pub async fn on_summon(
     let mut reply_results = Vec::with_capacity(gacha_results.len());
     let mut all_changed_item_ids = Vec::new();
     let mut all_changed_currencies = Vec::new();
+    let mut new_heroes = Vec::new();
 
     for result in gacha_results {
         match result {
@@ -200,20 +201,24 @@ pub async fn on_summon(
                     (false, dup)
                 } else {
                     create_hero(&db, user_id, hero_id).await?;
+                    new_heroes.push(hero_id);
                     (true, 0)
                 };
 
-                let (item_rewards, currency_rewards) =
-                    grant_dupe_rewards(hero_id, duplicate_count).await?;
+                if !is_new && duplicate_count > 0 {
+                    let (item_rewards, currency_rewards) =
+                        grant_dupe_rewards(hero_id, duplicate_count).await?;
 
-                if !item_rewards.is_empty() {
-                    let item_ids = add_items(&db, user_id, &item_rewards).await?;
-                    all_changed_item_ids.extend(item_ids);
-                }
+                    if !item_rewards.is_empty() {
+                        let item_ids = add_items(&db, user_id, &item_rewards).await?;
+                        all_changed_item_ids.extend(item_ids);
+                    }
 
-                if !currency_rewards.is_empty() {
-                    let currency_changes = add_currencies(&db, user_id, &currency_rewards).await?;
-                    all_changed_currencies.extend(currency_changes);
+                    if !currency_rewards.is_empty() {
+                        let currency_changes =
+                            add_currencies(&db, user_id, &currency_rewards).await?;
+                        all_changed_currencies.extend(currency_changes);
+                    }
                 }
 
                 reply_results.push(SummonResult {
@@ -259,6 +264,29 @@ pub async fn on_summon(
     if !all_changed_currencies.is_empty() || !actual_cost_currencies.is_empty() {
         all_changed_currencies.extend(actual_cost_currencies.iter().map(|(id, _)| (*id, 0)));
         push::send_currency_change_push(ctx.clone(), user_id, all_changed_currencies).await?;
+    }
+
+    if !new_heroes.is_empty() {
+        let mut hero_infos = Vec::new();
+        for hero_id in new_heroes {
+            if let Ok(hero) =
+                database::db::game::heroes::get_hero_by_hero_id(&db, user_id, hero_id).await
+            {
+                hero_infos.push(hero.into());
+            }
+        }
+
+        if !hero_infos.is_empty() {
+            let hero_push = sonettobuf::HeroUpdatePush {
+                hero_updates: hero_infos,
+            };
+
+            let mut ctx_guard = ctx.lock().await;
+            ctx_guard
+                .send_push(CmdId::HeroHeroUpdatePushCmd, hero_push)
+                .await?;
+            drop(ctx_guard);
+        }
     }
 
     /*if needs_conversion {

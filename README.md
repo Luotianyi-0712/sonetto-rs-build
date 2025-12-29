@@ -20,11 +20,13 @@ Sonetto-rs is a Rust implementation of a server emulator (PS) for *Reverse: 1999
 * [Requirements](#requirements)
 * [Features](#features-what-works-now)
 * [Known limitations / Not working (confirmed)](#known-limitations--not-working-confirmed)
+* [Bug fixes](#bug-fixes)
 * [Prebuilt binaries](#prebuilt-binaries)
 * [Contributing](#contributing)
 * [Known bugs](#known-bugs)
 * [Plans / Roadmap](#plans--roadmap)
 * [Todo](#todo)
+* [GM Commands](#gm-commands)
 
 ---
 
@@ -110,6 +112,7 @@ Create a `data/` folder next to those binaries and copy `excel2json` and the `st
 * Characters can be marked as favorite
 * Gacha now reduces currency used and converts when low
 * GM commands now added (check friend list)
+* Resonance system added (can update/add talent styles)
 
 ---
 
@@ -125,6 +128,13 @@ Create a `data/` folder next to those binaries and copy `excel2json` and the `st
 * Profile picture upload/management
 * Real-time battle logic: currently battles may be fast-forwarded/skipped to the end
 * Drop rates and reward balancing need comprehensive testing
+
+---
+
+## Bug fixes
+
+* Psychube upgrade materials no longer locked by default
+* Fixed a bug with 7 day sign rewards (users no longer get double rewards)
 
 ---
 
@@ -149,7 +159,6 @@ Please follow existing code style and keep changes focused per PR.
 
 ## Known bugs
 
-* **7-day sign-in**: was giving duplicate rewards at midnight in multiple time formats, *this was fixed*.
 * **Ezio moxie display**: Ezio sometimes shows an incorrect (very large) moxie value; this is a UI/visual bug under investigation.
 * **Month card daily sign-in** sometimes ui pops up twice during sign in
 
@@ -163,7 +172,7 @@ Short-term:
 
 * Fix confirmed broken handlers and persistence bugs
 * Implement a proper account & progress management system (replace current hardcoded/maxed defaults)
-* Finish currency/gacha logic and balance drops
+* Finish ~~currency/~~gacha logic and balance drops
 * Improve battle logic to match the official game behavior
 
 ---
@@ -173,6 +182,16 @@ Short-term:
 * Remove dead / unnecessary code
 * Remove unused static/starter data
 * Improve documentation and setup instructions
+
+---
+
+## GM Commands
+
+* Use currency, item and equip table for ids
+* Here are some example commands
+* /currency 1 1000
+* /item 140001 1000
+* /equip 1000 1
 
 ---
 

@@ -33,10 +33,10 @@ pub async fn on_auto_use_expire_power_item(
         } else {
             false
         }
-    }; // Lock is dropped here
+    };
 
     if should_save {
-        let ctx_guard = ctx.lock().await; // Re-acquire lock
+        let ctx_guard = ctx.lock().await;
         ctx_guard.save_current_player_state().await?;
     }
 

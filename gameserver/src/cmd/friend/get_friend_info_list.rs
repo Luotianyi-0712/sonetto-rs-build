@@ -19,12 +19,12 @@ pub async fn on_get_friend_info_list(
     let friends = vec![FriendInfo {
         user_id: Some(1337),
         level: Some(80),
-        time: None,
+        time: None, //setting a time actually makes you appear offline
         name: Some("Sonetto Bot".to_string()),
         portrait: Some(171805),
         desc: Some("".to_string()),
-        infos: vec![],
-        bg: None,
+        infos: vec![], //this is where you friends hero profile would appear but we don't need that for a bot
+        bg: None, // ig this is the background 
     }];
 
     let reply = GetFriendInfoListReply { info: friends };

@@ -37,7 +37,7 @@ pub async fn on_use_item(
         consumed_items.push(material_id);
 
         let is_hero_item = matches!(material_id, 252701 | 550001 | 520010);
-        let is_hero_selector = matches!(material_id, 481022);
+        let is_hero_selector = matches!(material_id, 481022 | 481004);
 
         let (item_rewards, currency_rewards) = if is_hero_selector && request.target_id.is_some() {
             let game_data = data::exceldb::get();

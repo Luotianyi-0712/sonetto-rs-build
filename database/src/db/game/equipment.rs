@@ -127,16 +127,22 @@ pub async fn add_equipment(
 ) -> Result<Vec<i32>> {
     let now = common::time::ServerTime::now_ms();
     let game_data = data::exceldb::get();
-    let equip_cfg = game_data
+    let equip = game_data
         .equip
         .get(equip_id)
         .ok_or_else(|| anyhow::anyhow!("Equipment {} not found", equip_id))?;
 
-    let (level, break_lv, refine_lv, is_lock) = match equip_cfg.rare {
+    let (level, break_lv, refine_lv, is_lock) = match equip.rare {
         5 => (1, 0, 0, true),  // SSR: Level 1, locked
         4 => (1, 0, 0, true),  // SR: locked
         _ => (1, 0, 0, false), // Others: not locked
     };
+
+    let mut is_lock = is_lock;
+
+    if equip.name_en == "Enlighten" || equip.name_en == "Gluttony" || equip.name_en == "Greed" {
+        is_lock = false;
+    }
 
     // Get last UID
     let last_uid: Option<i64> =
@@ -180,6 +186,22 @@ pub async fn get_equipment_count(pool: &SqlitePool, user_id: i64, equip_id: i32)
             .await?;
 
     Ok(count as i32)
+}
+
+pub async fn update_equipment_count(
+    pool: &SqlitePool,
+    user_id: i64,
+    equip_id: i32,
+    amount: i32,
+) -> Result<()> {
+    sqlx::query("UPDATE equipment SET count = count + ? WHERE user_id = ? AND equip_id = ?")
+        .bind(amount)
+        .bind(user_id)
+        .bind(equip_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
 }
 
 pub async fn add_equipments(

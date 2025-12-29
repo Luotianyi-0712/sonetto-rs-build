@@ -188,10 +188,19 @@ async fn cmd_equip(ctx: CommandContext) -> Result<String, AppError> {
 
     let db = ctx.ctx.lock().await.state.db.clone();
 
-    let equip_uids =
-        game::equipment::add_equipments(&db, ctx.user_id, &vec![(equip_id, amount)]).await?;
+    let equip_uids = if equip_id == 1002 || equip_id == 1003 || equip_id == 1004 || equip_id == 1005
+    {
+        game::equipment::update_equipment_count(&db, ctx.user_id, equip_id, amount).await?;
+
+        vec![equip_id]
+    } else {
+        game::equipment::add_equipments(&db, ctx.user_id, &[(equip_id, amount)]).await?
+    };
 
     push::send_equip_update_push(ctx.ctx.clone(), ctx.user_id, equip_uids).await?;
+
+    let material_changes = vec![(9, equip_id as u32, amount)];
+    push::send_material_change_push(ctx.ctx.clone(), material_changes, None).await?;
 
     Ok(format!("Added {} of equipment {}", amount, equip_id))
 }

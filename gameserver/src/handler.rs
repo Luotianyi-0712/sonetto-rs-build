@@ -59,6 +59,10 @@ pub async fn dispatch_command(
         CmdId::ChoiceHero3123WeaponCmd => hero::on_choice_hero_3123_weapon,
         // sets euphoria for heros
         CmdId::DestinyStoneUseCmd => destiny_stone::on_destiny_stone_use,
+        CmdId::HeroUpgradeSkillCmd => hero::on_hero_upgrade_skill,
+        CmdId::UnMarkIsNewCmd => hero::on_unmark_is_new,
+        CmdId::HeroLevelUpCmd => hero::on_hero_level_up,
+        CmdId::HeroRankUpCmd => hero::on_hero_rank_up,
 
         // === Hero Groups ===
         CmdId::GetHeroGroupCommonListCmd => hero_group::on_get_hero_group_common_list,
@@ -188,6 +192,13 @@ pub async fn dispatch_command(
         // === Talent ===
         //Todo add option for talent upgrades
         CmdId::TalentStyleReadCmd => talent::on_talent_style_read, // just echos back the hero id
+        CmdId::PutTalentCubeCmd => talent::on_put_talent_cube,
+        CmdId::HeroTalentUpCmd => talent::on_hero_talent_up,
+        CmdId::PutTalentSchemeCmd => talent::on_put_talent_scheme,
+        CmdId::HeroTalentStyleStatCmd => talent::on_hero_talent_style_stat,
+        CmdId::UnlockTalentStyleCmd => talent::on_unlock_talent_style,
+        CmdId::UseTalentStyleCmd => talent::on_use_talent_style,
+        CmdId::UseTalentTemplateCmd => talent::on_use_talent_template,
 
         // === BGM ===
         CmdId::GetBgmInfoCmd => bgm::on_get_bgm_info, // we're loading all the bgm from the excel table for starter data

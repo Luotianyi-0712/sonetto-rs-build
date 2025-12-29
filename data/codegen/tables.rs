@@ -33,4 +33,6 @@ pub const FILTER_TABLES: &[&str] = &[
     "bonus",
     "hero_trial",
     "store_goods",
+    "character_cosume",
+    "talent_style_cost",
 ];

@@ -7,7 +7,7 @@ use sonettobuf::{CmdId, HeroUpdatePush, TalentStyleReadReply, TalentStyleReadReq
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub async fn on_talent_style_read(
+pub async fn on_hero_talent_style_stat(
     ctx: Arc<Mutex<ConnectionContext>>,
     req: ClientPacket,
 ) -> Result<(), AppError> {
@@ -19,6 +19,21 @@ pub async fn on_talent_style_read(
     let user_id = {
         let ctx_guard = ctx.lock().await;
         let player_id = ctx_guard.player_id.ok_or(AppError::NotLoggedIn)?;
+        let pool = &ctx_guard.state.db;
+
+        let hero = heroes::get_hero_by_hero_id(pool, player_id, hero_id).await?;
+
+        sqlx::query("UPDATE heroes SET talent_style_red = 0 WHERE uid = ? AND user_id = ?")
+            .bind(hero.record.uid)
+            .bind(player_id)
+            .execute(pool)
+            .await?;
+
+        tracing::info!(
+            "User {} marked talent style as read for hero {}",
+            player_id,
+            hero_id
+        );
 
         player_id
     };
@@ -42,7 +57,7 @@ pub async fn on_talent_style_read(
             .await?;
 
         ctx_guard
-            .send_reply(CmdId::TalentStyleReadCmd, data, 0, req.up_tag)
+            .send_reply(CmdId::HeroTalentStyleStatCmd, data, 0, req.up_tag)
             .await?;
     }
 

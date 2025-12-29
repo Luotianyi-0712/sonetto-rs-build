@@ -223,6 +223,7 @@ pub async fn load_hero_list(
         //.filter(|c| c.rare >= 1 && c.rare <= 5) // Valid rarity (1-5 stars)
         .filter(|c| c.id != 3029)
         .filter(|c| c.id != 9998)
+        //.filter(|c| c.id != 3125) // testing leveling logic
         .collect();
 
     for character in characters.clone() {
@@ -753,6 +754,12 @@ pub async fn load_equipment(
             _ => (60, 3, 5, false),
         };
 
+        let mut is_locked = is_locked;
+
+        if equip.name_en == "Enlighten" || equip.name_en == "Gluttony" || equip.name_en == "Greed" {
+            is_locked = false;
+        }
+
         sqlx::query(
             r#"
             INSERT INTO equipment (
@@ -798,15 +805,15 @@ pub async fn load_starter_items(
         .iter()
         .filter(|i| i.is_show == 1 && i.is_stackable == 1)
         .filter(|i| i.expire_time == "".to_string())
-        .filter(|i| i.id != 481002) //selector for psychube not implimented can't find the item id to push
         .collect();
 
     for item in stackable_items.clone() {
         let mut quantity = match item.sub_type {
-            13 => 0, // potrait dupes
-            50 => 1, // dev items 9999
-            66 => 0, // blocks for wilderness
-            70 => 0,
+            13 => 0,  // potrait dupes
+            48 => 10, // selector
+            50 => 1,  // dev items 9999
+            66 => 0,  // blocks for wilderness
+            70 => 0,  // Block selector //block types are 14
             _ => 100, // Default
         };
 
