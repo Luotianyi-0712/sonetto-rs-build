@@ -1,6 +1,10 @@
 # This is just a compiled repository, please go to the [original repository](https://github.com/Yoshk4e/sonetto-rs).
 
 Rust can't run on my computer, so I created this repository.
+
+## Current supported version: **3.1 (non-steam)**
+PS was made to use the pc [version](https://download.bluepoch.com/en/Reverse1999_v3.1.0.38_en.exe) of the game.
+
 ## Thks
 -Yoshk4e
 
