@@ -114,7 +114,10 @@ Create a `data/` folder next to those binaries and copy `excel2json` and the `st
 * GM commands now added (**check friend list**)
 * Resonance system added (can update/add talent styles)
 * Premium shop added (can purchase premium items)
+* Shop now resets (daily, weekly and monthly)
 * Mail added (can claim rewards)
+* Insight items added
+* Auto use expired items
 
 ---
 

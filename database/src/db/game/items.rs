@@ -99,6 +99,18 @@ pub async fn get_all_power_items(pool: &SqlitePool, user_id: i64) -> sqlx::Resul
         .await
 }
 
+pub async fn get_power_item(
+    pool: &SqlitePool,
+    user_id: i64,
+    item_id: u32,
+) -> sqlx::Result<Option<PowerItem>> {
+    sqlx::query_as("SELECT * FROM power_items WHERE user_id = ? AND item_id = ?")
+        .bind(user_id)
+        .bind(item_id as i64)
+        .fetch_optional(pool)
+        .await
+}
+
 pub async fn add_power_items(
     pool: &SqlitePool,
     user_id: i64,
@@ -196,6 +208,18 @@ pub async fn get_all_insight_items(
     sqlx::query_as("SELECT * FROM insight_items WHERE user_id = ? AND expire_time > strftime('%s', 'now') ORDER BY expire_time")
         .bind(user_id)
         .fetch_all(pool)
+        .await
+}
+
+pub async fn get_insight_item(
+    pool: &SqlitePool,
+    user_id: i64,
+    item_id: u32,
+) -> sqlx::Result<Option<InsightItem>> {
+    sqlx::query_as("SELECT * FROM insight_items WHERE user_id = ? AND item_id = ?")
+        .bind(user_id)
+        .bind(item_id as i64)
+        .fetch_optional(pool)
         .await
 }
 

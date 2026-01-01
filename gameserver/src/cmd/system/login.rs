@@ -56,13 +56,16 @@ pub async fn on_login(
             let ctx = ctx.lock().await;
             ctx.state.db.clone()
         };
-        let (is_new_day, is_new_week, _is_new_month) =
+        let (is_new_day, is_new_week, is_new_month) =
             sign_in::process_daily_login(&db, user_id).await?;
         if is_new_day {
             sign_in::reset_daily_counters(&db, user_id).await?;
         }
         if is_new_week {
             sign_in::reset_weekly_counters(&db, user_id).await?;
+        }
+        if is_new_month {
+            sign_in::reset_monthly_counters(&db, user_id).await?;
         }
     }
 

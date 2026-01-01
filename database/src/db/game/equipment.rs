@@ -139,7 +139,6 @@ pub async fn add_equipment(
     };
 
     let mut is_lock = is_lock;
-
     if equip.name_en == "Enlighten" || equip.name_en == "Gluttony" || equip.name_en == "Greed" {
         is_lock = false;
     }
@@ -153,10 +152,34 @@ pub async fn add_equipment(
 
     let new_uid = last_uid.map(|uid| uid + 1).unwrap_or(30000000);
 
-    let mut next_uid = new_uid + 1;
+    let is_stackable = equip_id == 1002 || equip_id == 1003 || equip_id == 1004 || equip_id == 1005;
 
-    for _ in 0..count {
+    if is_stackable {
         sqlx::query(
+            r#"
+            INSERT INTO equipment
+              (uid, user_id, equip_id, level, exp, break_lv, count, is_lock, refine_lv, created_at, updated_at)
+            VALUES
+              (?,   ?,      ?,       ?,     ?,   ?,        ?,     ?,       ?,         ?,         ?)
+            "#,
+        )
+        .bind(new_uid)
+        .bind(user_id)
+        .bind(equip_id)
+        .bind(level)
+        .bind(0)
+        .bind(break_lv)
+        .bind(count)
+        .bind(is_lock)
+        .bind(refine_lv)
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+    } else {
+        let mut next_uid = new_uid;
+        for _ in 0..count {
+            sqlx::query(
                 r#"
                 INSERT INTO equipment
                   (uid, user_id, equip_id, level, exp, break_lv, count, is_lock, refine_lv, created_at, updated_at)
@@ -177,8 +200,8 @@ pub async fn add_equipment(
             .bind(now)
             .execute(pool)
             .await?;
-
-        next_uid += 1;
+            next_uid += 1;
+        }
     }
 
     Ok(vec![equip_id])
@@ -220,8 +243,20 @@ pub async fn add_equipments(
     let mut changed_ids = Vec::new();
 
     for (equip_id, count) in equips {
-        let ids = add_equipment(pool, user_id, *equip_id, *count).await?;
-        changed_ids.extend(ids);
+        if *equip_id == 1002 || *equip_id == 1003 || *equip_id == 1004 || *equip_id == 1005 {
+            let existing_count = get_equipment_count(pool, user_id, *equip_id).await?;
+
+            if existing_count > 0 {
+                update_equipment_count(pool, user_id, *equip_id, *count).await?;
+            } else {
+                add_equipment(pool, user_id, *equip_id, *count).await?;
+            }
+
+            changed_ids.push(*equip_id);
+        } else {
+            let ids = add_equipment(pool, user_id, *equip_id, *count).await?;
+            changed_ids.extend(ids);
+        }
     }
 
     Ok(changed_ids)

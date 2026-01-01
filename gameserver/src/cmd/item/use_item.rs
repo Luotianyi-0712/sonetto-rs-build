@@ -175,7 +175,7 @@ pub async fn on_use_item(
 
     consumed_items.extend(&reward_items);
     if !consumed_items.is_empty() {
-        push::send_item_change_push(ctx.clone(), user_id, consumed_items).await?;
+        push::send_item_change_push(ctx.clone(), user_id, consumed_items, vec![], vec![]).await?;
     }
 
     if !reward_currencies.is_empty() {

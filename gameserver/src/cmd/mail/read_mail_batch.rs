@@ -23,7 +23,7 @@ pub async fn on_read_mail_batch(
         all_items,
         all_currencies,
         all_equips,
-        _, //all heroes
+        new_heroes,
         all_material_changes,
     ) = {
         let ctx_guard = ctx.lock().await;
@@ -48,10 +48,11 @@ pub async fn on_read_mail_batch(
         let mut total_equips = Vec::new();
         let mut total_heroes = Vec::new();
         let mut total_power_items = Vec::new();
+        let mut total_insight_selectors = Vec::new();
 
         for (_incr_id, attachment) in &mails {
             if !attachment.is_empty() {
-                let (items, currencies, equips, heroes, power_items) =
+                let (items, currencies, equips, heroes, power_items, insight_selectors) =
                     crate::state::parse_store_product(attachment);
 
                 total_items.extend(items);
@@ -59,6 +60,7 @@ pub async fn on_read_mail_batch(
                 total_equips.extend(equips);
                 total_heroes.extend(heroes);
                 total_power_items.extend(power_items);
+                total_insight_selectors.extend(insight_selectors);
             }
         }
 
@@ -100,6 +102,12 @@ pub async fn on_read_mail_batch(
             .await?;
         }
 
+        if !total_insight_selectors.is_empty() {
+            add_items(pool, player_id, &total_insight_selectors).await?;
+        }
+
+        let mut new_heroes = Vec::new();
+
         for (hero_id, _count) in &total_heroes {
             let hero_id = *hero_id as i32;
 
@@ -116,6 +124,7 @@ pub async fn on_read_mail_batch(
                 );
             } else {
                 database::db::game::heroes::create_hero(pool, player_id, hero_id).await?;
+                new_heroes.push(hero_id);
                 tracing::info!(
                     "User {} received new hero {} from batch mail",
                     player_id,
@@ -145,14 +154,15 @@ pub async fn on_read_mail_batch(
         }
 
         tracing::info!(
-            "User {} claimed {} mails: {} items, {} currencies, {} equips, {} heroes, {} power items",
+            "User {} claimed {} mails: {} items, {} currencies, {} equips, {} heroes, {} power items, {} insight selectors",
             player_id,
             mail_ids.len(),
             total_items.len(),
             total_currencies.len(),
             total_equips.len(),
             total_heroes.len(),
-            total_power_items.len()
+            total_power_items.len(),
+            total_insight_selectors.len()
         );
 
         let mut material_changes = Vec::new();
@@ -171,6 +181,9 @@ pub async fn on_read_mail_batch(
         for (power_item_id, amount) in &total_power_items {
             material_changes.push((10, *power_item_id, *amount));
         }
+        for (insight_selector_id, amount) in &total_insight_selectors {
+            material_changes.push((24, *insight_selector_id, *amount));
+        }
 
         (
             player_id,
@@ -178,10 +191,36 @@ pub async fn on_read_mail_batch(
             item_ids,
             currency_ids,
             equip_ids,
-            total_heroes,
+            new_heroes,
             material_changes,
         )
-    };
+    }; // ctx_guard dropped here
+
+    // Send hero update push AFTER dropping ctx_guard
+    if !new_heroes.is_empty() {
+        let ctx_guard = ctx.lock().await;
+        let pool = &ctx_guard.state.db;
+        let mut hero_infos = Vec::new();
+
+        for hero_id in new_heroes {
+            if let Ok(hero) =
+                database::db::game::heroes::get_hero_by_hero_id(pool, user_id, hero_id).await
+            {
+                hero_infos.push(hero.into());
+            }
+        }
+        drop(ctx_guard);
+
+        if !hero_infos.is_empty() {
+            let hero_push = sonettobuf::HeroUpdatePush {
+                hero_updates: hero_infos,
+            };
+            let mut ctx_guard = ctx.lock().await;
+            ctx_guard
+                .send_push(CmdId::HeroHeroUpdatePushCmd, hero_push)
+                .await?;
+        }
+    }
 
     let reply = ReadMailBatchReply {
         incr_ids: incr_ids.iter().map(|id| *id as u64).collect(),
@@ -195,7 +234,7 @@ pub async fn on_read_mail_batch(
     }
 
     if !all_items.is_empty() {
-        push::send_item_change_push(ctx.clone(), user_id, all_items).await?;
+        push::send_item_change_push(ctx.clone(), user_id, all_items, vec![], vec![]).await?;
     }
 
     if !all_currencies.is_empty() {

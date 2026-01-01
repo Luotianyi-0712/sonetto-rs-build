@@ -153,7 +153,8 @@ pub async fn on_hero_rank_up(
                 );
 
                 drop(ctx_guard);
-                push::send_item_change_push(ctx.clone(), player_id, vec![*item_id]).await?;
+                push::send_item_change_push(ctx.clone(), player_id, vec![*item_id], vec![], vec![])
+                    .await?;
 
                 let mut ctx_guard = ctx.lock().await;
                 ctx_guard
@@ -290,6 +291,8 @@ pub async fn on_hero_rank_up(
             ctx.clone(),
             user_id,
             consumed_items.iter().map(|(id, _)| *id).collect(),
+            vec![],
+            vec![],
         )
         .await?;
     }

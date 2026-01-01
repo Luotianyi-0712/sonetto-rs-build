@@ -43,15 +43,14 @@ pub async fn send_item_change_push(
     ctx: Arc<Mutex<ConnectionContext>>,
     user_id: i64,
     changed_item_ids: Vec<u32>,
+    changed_power_item_ids: Vec<u32>,
+    changed_insight_item_ids: Vec<u32>,
 ) -> Result<(), AppError> {
-    if changed_item_ids.is_empty() {
-        return Ok(());
-    }
-
     let (items_list, power_items_list, insight_items_list) = {
         let ctx_guard = ctx.lock().await;
         let pool = &ctx_guard.state.db;
 
+        // Normal items: fetch per item_id
         let mut items = Vec::new();
         for item_id in &changed_item_ids {
             if let Some(item) = items::get_item(pool, user_id, *item_id).await? {
@@ -59,9 +58,17 @@ pub async fn send_item_change_push(
             }
         }
 
-        let power_items = items::get_all_power_items(pool, user_id).await?;
+        let mut power_items = Vec::new();
+        for item_id in &changed_power_item_ids {
+            let rows = items::get_power_item(pool, user_id, *item_id).await?;
+            power_items.extend(rows);
+        }
 
-        let insight_items = items::get_all_insight_items(pool, user_id).await?;
+        let mut insight_items = Vec::new();
+        for item_id in &changed_insight_item_ids {
+            let rows = items::get_insight_item(pool, user_id, *item_id).await?;
+            insight_items.extend(rows);
+        }
 
         (items, power_items, insight_items)
     };
@@ -73,6 +80,7 @@ pub async fn send_item_change_push(
             power_items: power_items_list.into_iter().map(Into::into).collect(),
             insight_items: insight_items_list.into_iter().map(Into::into).collect(),
         };
+
         ctx_guard
             .send_push(CmdId::ItemChangePushCmd, push.clone())
             .await?;

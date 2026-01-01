@@ -93,7 +93,7 @@ pub async fn on_buy_goods(
         &goods.cost
     };
 
-    let (cost_items, cost_currencies, _, _, _) = parse_store_product(cost_str);
+    let (cost_items, cost_currencies, _, _, _, _) = parse_store_product(cost_str);
     let cost_items: Vec<(u32, i32)> = cost_items
         .iter()
         .map(|(id, amt)| (*id, amt * quantity))
@@ -124,7 +124,8 @@ pub async fn on_buy_goods(
 
                 drop(ctx_guard);
 
-                push::send_item_change_push(ctx.clone(), user_id, vec![*item_id]).await?;
+                push::send_item_change_push(ctx.clone(), user_id, vec![*item_id], vec![], vec![])
+                    .await?;
 
                 let mut ctx_guard = ctx.lock().await;
                 ctx_guard
@@ -215,7 +216,8 @@ pub async fn on_buy_goods(
         );
     }
 
-    let (items, currencies, equips, heroes, power_items) = parse_store_product(&goods.product);
+    let (items, currencies, equips, heroes, power_items, insight_selectors) =
+        parse_store_product(&goods.product);
     let items: Vec<(u32, i32)> = items
         .iter()
         .map(|(id, amt)| (*id, amt * quantity))
@@ -233,6 +235,10 @@ pub async fn on_buy_goods(
         .map(|(id, amt)| (*id, amt * quantity))
         .collect();
     let power_items: Vec<(u32, i32)> = power_items
+        .iter()
+        .map(|(id, amt)| (*id, amt * quantity))
+        .collect();
+    let insight_selectors: Vec<(u32, i32)> = insight_selectors
         .iter()
         .map(|(id, amt)| (*id, amt * quantity))
         .collect();
@@ -283,6 +289,11 @@ pub async fn on_buy_goods(
                     .collect::<Vec<_>>(),
             )
             .await?;
+        }
+
+        if !insight_selectors.is_empty() {
+            let insight_item_ids = add_items(pool, user_id, &insight_selectors).await?;
+            item_ids.extend(insight_item_ids);
         }
 
         let mut hero_dupe_items = Vec::new();
@@ -351,6 +362,9 @@ pub async fn on_buy_goods(
     for (power_item_id, amount) in &power_items {
         material_changes.push((10, *power_item_id, *amount));
     }
+    for (insight_selector_id, amount) in &insight_selectors {
+        material_changes.push((24, *insight_selector_id, *amount));
+    }
     if hero_dupe_items.is_empty() && hero_dupe_currencies.is_empty() {
         for (hero_id, amount) in &heroes {
             material_changes.push((4, *hero_id, *amount));
@@ -378,7 +392,8 @@ pub async fn on_buy_goods(
     all_changed_items.extend(cost_items.iter().map(|(id, _)| *id));
 
     if !all_changed_items.is_empty() {
-        push::send_item_change_push(ctx.clone(), user_id, all_changed_items).await?;
+        push::send_item_change_push(ctx.clone(), user_id, all_changed_items, vec![], vec![])
+            .await?;
     }
 
     if !changed_currency_ids.is_empty() || !cost_currencies.is_empty() {

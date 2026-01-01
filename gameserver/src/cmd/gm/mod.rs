@@ -83,7 +83,8 @@ async fn cmd_item(ctx: CommandContext) -> Result<String, AppError> {
 
     add_items(&db, ctx.user_id, &[(item_id, amount)]).await?;
 
-    push::send_item_change_push(ctx.ctx.clone(), ctx.user_id, vec![item_id]).await?;
+    push::send_item_change_push(ctx.ctx.clone(), ctx.user_id, vec![item_id], vec![], vec![])
+        .await?;
 
     let material_changes = vec![(1, item_id, amount)];
     push::send_material_change_push(ctx.ctx.clone(), material_changes, None).await?;

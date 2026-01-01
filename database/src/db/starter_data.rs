@@ -908,7 +908,10 @@ pub async fn load_starter_items(
     for insight_item in insight_items.clone() {
         let uid = INSIGHT_ITEM_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
-        let expire_time = now + 10 * 24 * 3600;
+        const HOUR_MS: i64 = 60 * 60 * 1000;
+
+        let expire_time = now + insight_item.expire_hours as i64 * HOUR_MS;
+
         sqlx::query(
             r#"
             INSERT INTO insight_items (
@@ -920,7 +923,7 @@ pub async fn load_starter_items(
         .bind(user_id)
         .bind(insight_item.id)
         .bind(1)
-        .bind(expire_time as i32)
+        .bind(expire_time / 1000)
         .bind(now)
         .execute(&mut **tx)
         .await?;

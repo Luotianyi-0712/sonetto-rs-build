@@ -19,7 +19,7 @@ pub async fn on_new_order(
     let selection_infos = request.selection_infos;
 
     let now = common::time::ServerTime::now_ms();
-    let game_order_id = now as i64;
+    let game_order_id = now;
 
     let (
         user_id,
@@ -29,6 +29,7 @@ pub async fn on_new_order(
         first_charge,
         total_charge,
         user_tag,
+        _,
     ) = {
         let ctx_guard = ctx.lock().await;
         let player_id = ctx_guard.player_id.ok_or(AppError::NotLoggedIn)?;
@@ -41,51 +42,125 @@ pub async fn on_new_order(
             .find(|g| g.id == goods_id)
             .ok_or(AppError::InvalidRequest)?;
 
-        let mut all_items = charge_pack.item.clone();
+        let is_month_card = charge_pack.r#type == 2;
 
-        for selection in &selection_infos {
-            let region_id = selection.region_id.unwrap_or(0);
-            let selection_pos = selection.selection_pos.unwrap_or(0);
+        let all_items = if is_month_card {
+            if let Some(month_card) = game_data.month_card.iter().find(|m| m.id == goods_id) {
+                let existing_end_time: Option<i64> = sqlx::query_scalar(
+                    "SELECT end_time FROM user_month_card_history
+                     WHERE user_id = ? AND card_id = ?
+                     ORDER BY end_time DESC LIMIT 1",
+                )
+                .bind(player_id)
+                .bind(goods_id)
+                .fetch_optional(pool)
+                .await?;
 
-            if let Some(optional) = game_data
-                .store_charge_optional
-                .iter()
-                .find(|o| o.goods_id == goods_id && o.id == region_id)
-            {
-                let item_choices: Vec<&str> = optional.items.split('|').collect();
+                let start_time = now;
+                let days_to_add = month_card.days as i64;
 
-                if let Some(selected_item) = item_choices.get(selection_pos as usize) {
-                    if !all_items.is_empty() {
-                        all_items.push('|');
-                    }
-                    all_items.push_str(selected_item);
-
-                    tracing::info!(
-                        "User {} selected option region={} pos={} (index {}): {}",
-                        player_id,
-                        region_id,
-                        selection_pos,
-                        selection_pos,
-                        selected_item
-                    );
+                let new_end_time = if let Some(existing_end) = existing_end_time {
+                    let existing_end_ms = existing_end * 1000;
+                    let base_time = if existing_end_ms > now {
+                        existing_end_ms
+                    } else {
+                        now
+                    };
+                    base_time + (days_to_add * 24 * 60 * 60 * 1000)
                 } else {
-                    tracing::warn!(
-                        "User {} invalid selection: region={} pos={} out of {} options",
-                        player_id,
-                        region_id,
-                        selection_pos,
-                        item_choices.len()
-                    );
+                    now + (days_to_add * 24 * 60 * 60 * 1000)
+                };
+
+                if existing_end_time.is_some() {
+                    sqlx::query(
+                        "UPDATE user_month_card_history
+                         SET end_time = ?
+                         WHERE user_id = ? AND card_id = ?
+                         AND end_time = (SELECT MAX(end_time) FROM user_month_card_history WHERE user_id = ? AND card_id = ?)"
+                    )
+                    .bind(new_end_time / 1000)
+                    .bind(player_id)
+                    .bind(goods_id)
+                    .bind(player_id)
+                    .bind(goods_id)
+                    .execute(pool)
+                    .await?;
+                } else {
+                    sqlx::query(
+                        "INSERT INTO user_month_card_history (user_id, card_id, start_time, end_time)
+                         VALUES (?, ?, ?, ?)",
+                    )
+                    .bind(player_id)
+                    .bind(goods_id)
+                    .bind(start_time / 1000)
+                    .bind(new_end_time / 1000)
+                    .execute(pool)
+                    .await?;
+                }
+
+                let current_server_day = common::time::ServerTime::server_day(now);
+                sqlx::query(
+                    "INSERT OR IGNORE INTO user_month_card_days (user_id, server_day, day_of_month)
+                     VALUES (?, ?, 1)",
+                )
+                .bind(player_id)
+                .bind(current_server_day)
+                .execute(pool)
+                .await?;
+
+                tracing::info!(
+                    "User {} activated month card {} for {} days (expires: {}, extended: {})",
+                    player_id,
+                    goods_id,
+                    days_to_add,
+                    new_end_time,
+                    existing_end_time.is_some()
+                );
+
+                format!("{}|{}", month_card.once_bonus, month_card.daily_bonus)
+            } else {
+                String::new()
+            }
+        } else {
+            let mut all_items = charge_pack.item.clone();
+
+            for selection in &selection_infos {
+                let region_id = selection.region_id.unwrap_or(0);
+                let selection_pos = selection.selection_pos.unwrap_or(0);
+
+                if let Some(optional) = game_data
+                    .store_charge_optional
+                    .iter()
+                    .find(|o| o.goods_id == goods_id && o.id == region_id)
+                {
+                    let item_choices: Vec<&str> = optional.items.split('|').collect();
+
+                    if let Some(selected_item) = item_choices.get(selection_pos as usize) {
+                        if !all_items.is_empty() {
+                            all_items.push('|');
+                        }
+                        all_items.push_str(selected_item);
+
+                        tracing::info!(
+                            "User {} selected option region={} pos={}: {}",
+                            player_id,
+                            region_id,
+                            selection_pos,
+                            selected_item
+                        );
+                    }
                 }
             }
-        }
+
+            all_items
+        };
 
         let attachment = all_items.clone();
 
-        let (items, currencies, equips, heroes, power_items) =
+        let (items, currencies, equips, heroes, power_items, insight_selectors) =
             crate::state::parse_store_product(&all_items);
 
-        let item_ids = if !items.is_empty() {
+        let mut item_ids = if !items.is_empty() {
             add_items(pool, player_id, &items).await?
         } else {
             vec![]
@@ -107,6 +182,11 @@ pub async fn on_new_order(
                     .collect::<Vec<_>>(),
             )
             .await?;
+        }
+
+        if !insight_selectors.is_empty() {
+            let insight_item_ids = add_items(pool, player_id, &insight_selectors).await?;
+            item_ids.extend(insight_item_ids);
         }
 
         if !equips.is_empty() {
@@ -190,12 +270,13 @@ pub async fn on_new_order(
         .await?;
 
         tracing::info!(
-            "User {} purchased charge pack {} (price: ${}, total: ${:.2}, first_charge: {})",
+            "User {} purchased charge pack {} (price: ${}, total: ${:.2}, first_charge: {}, month_card: {})",
             player_id,
             goods_id,
             charge_pack.price,
             total_charge_amount as f64 / 100.0,
-            new_stats_first_charge
+            new_stats_first_charge,
+            is_month_card
         );
 
         (
@@ -206,6 +287,7 @@ pub async fn on_new_order(
             new_stats_first_charge == 1,
             total_charge_amount,
             user_tag,
+            is_month_card,
         )
     };
 
@@ -214,7 +296,7 @@ pub async fn on_new_order(
         pass_back_param: Some("".to_string()),
         notify_url: Some("".to_string()),
         game_order_id: Some(game_order_id),
-        timestamp: Some(now as i64),
+        timestamp: Some(now),
         sign: Some("03f92726ce15e0793dddd7f1a9db39f28".to_string()),
         server_id: Some(4),
         currency: request.origin_currency.clone(),
@@ -228,7 +310,7 @@ pub async fn on_new_order(
     }
 
     if !changed_items.is_empty() {
-        push::send_item_change_push(ctx.clone(), user_id, changed_items).await?;
+        push::send_item_change_push(ctx.clone(), user_id, changed_items, vec![], vec![]).await?;
     }
 
     if !changed_currencies.is_empty() {
@@ -263,7 +345,7 @@ pub async fn on_new_order(
     }
 
     let mut material_changes = Vec::new();
-    let (items, currencies, equips, heroes, power_items) =
+    let (items, currencies, equips, heroes, power_items, insight_selectors) =
         crate::state::parse_store_product(&attachment);
 
     for (item_id, amount) in items {
@@ -280,6 +362,9 @@ pub async fn on_new_order(
     }
     for (power_item_id, amount) in power_items {
         material_changes.push((10, power_item_id, amount));
+    }
+    for (insight_selector_id, amount) in insight_selectors {
+        material_changes.push((24, insight_selector_id, amount));
     }
 
     if !material_changes.is_empty() {

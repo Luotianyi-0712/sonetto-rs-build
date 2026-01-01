@@ -122,6 +122,8 @@ pub async fn on_hero_talent_up(
                             ctx.clone(),
                             player_id,
                             vec![item_id],
+                            vec![],
+                            vec![],
                         )
                         .await?;
 

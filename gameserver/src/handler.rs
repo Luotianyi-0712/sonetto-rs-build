@@ -82,6 +82,7 @@ pub async fn dispatch_command(
         CmdId::GetEquipInfoCmd => equip::on_get_equip_info,
         CmdId::UseItemCmd => item::on_use_item,
         CmdId::EquipLockCmd => equip::on_equip_lock,
+        CmdId::UseInsightItemCmd => item::on_use_insight_item,
 
         // === Skin & Cosmetics ===
         CmdId::UseSkinCmd => skin::on_use_skin,

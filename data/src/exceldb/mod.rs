@@ -26,6 +26,7 @@ pub mod item;
 pub mod monster;
 pub mod monster_skill_template;
 pub mod monster_template;
+pub mod month_card;
 pub mod open;
 pub mod power_item;
 pub mod skill;
@@ -71,6 +72,7 @@ pub struct GameDB {
     pub monster: monster::MonsterTable,
     pub monster_skill_template: monster_skill_template::MonsterSkillTemplateTable,
     pub monster_template: monster_template::MonsterTemplateTable,
+    pub month_card: month_card::MonthCardTable,
     pub open: open::OpenTable,
     pub power_item: power_item::PowerItemTable,
     pub skill: skill::SkillTable,
@@ -168,6 +170,9 @@ impl GameDB {
         let monster_template = monster_template::MonsterTemplateTable::load(
             &format!("{}/monster_template.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load monster_template.json: {}", e))?;
+        let month_card = month_card::MonthCardTable::load(
+            &format!("{}/month_card.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load month_card.json: {}", e))?;
         let open = open::OpenTable::load(
             &format!("{}/open.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load open.json: {}", e))?;
@@ -241,6 +246,7 @@ impl GameDB {
             monster,
             monster_skill_template,
             monster_template,
+            month_card,
             open,
             power_item,
             skill,

@@ -123,8 +123,14 @@ pub async fn on_unlock_talent_style(
 
                 drop(ctx_guard);
 
-                crate::utils::push::send_item_change_push(ctx.clone(), player_id, vec![*item_id])
-                    .await?;
+                crate::utils::push::send_item_change_push(
+                    ctx.clone(),
+                    player_id,
+                    vec![*item_id],
+                    vec![],
+                    vec![],
+                )
+                .await?;
 
                 let mut ctx_guard = ctx.lock().await;
                 ctx_guard

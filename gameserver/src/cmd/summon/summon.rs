@@ -77,7 +77,7 @@ pub async fn on_summon(
     let mut selected_currencies = Vec::new();
 
     for option in &cost_options {
-        let (items, currencies, _, _, _) = crate::state::parse_store_product(option);
+        let (items, currencies, _, _, _, _) = crate::state::parse_store_product(option);
 
         let mut can_afford = true;
         for (item_id, amount) in &items {
@@ -99,7 +99,7 @@ pub async fn on_summon(
     }
 
     if selected_items.is_empty() {
-        let (items, currencies, _, _, _) =
+        let (items, currencies, _, _, _, _) =
             crate::state::parse_store_product(cost_options.last().unwrap());
         selected_items = items;
         selected_currencies = currencies;
@@ -145,7 +145,7 @@ pub async fn on_summon(
     let needs_conversion = tickets_converted > 0;
 
     if needs_conversion {
-        push::send_item_change_push(ctx.clone(), user_id, vec![140001]).await?;
+        push::send_item_change_push(ctx.clone(), user_id, vec![140001], vec![], vec![]).await?;
     }
 
     {
@@ -258,7 +258,8 @@ pub async fn on_summon(
     all_changed_item_ids.extend(actual_cost_items.iter().map(|(id, _)| *id));
 
     if !all_changed_item_ids.is_empty() {
-        push::send_item_change_push(ctx.clone(), user_id, all_changed_item_ids).await?;
+        push::send_item_change_push(ctx.clone(), user_id, all_changed_item_ids, vec![], vec![])
+            .await?;
     }
 
     if !all_changed_currencies.is_empty() || !actual_cost_currencies.is_empty() {

@@ -17,7 +17,7 @@ pub async fn on_read_mail(
 
     let incr_id = request.incr_id.ok_or(AppError::InvalidRequest)?;
 
-    let (user_id, attachment, changed_items, changed_currencies, changed_equips) = {
+    let (user_id, attachment, changed_items, changed_currencies, changed_equips, new_heroes) = {
         let ctx_guard = ctx.lock().await;
         let player_id = ctx_guard.player_id.ok_or(AppError::NotLoggedIn)?;
         let pool = &ctx_guard.state.db;
@@ -49,7 +49,7 @@ pub async fn on_read_mail(
             return Ok(());
         }
 
-        let (items, currencies, equips, heroes, power_items) =
+        let (items, currencies, equips, heroes, power_items, insight_selectors) =
             crate::state::parse_store_product(&attachment);
 
         let item_ids = if !items.is_empty() {
@@ -90,6 +90,12 @@ pub async fn on_read_mail(
             .await?;
         }
 
+        if !insight_selectors.is_empty() {
+            add_items(pool, player_id, &insight_selectors).await?;
+        }
+
+        let mut new_heroes = Vec::new();
+
         for (hero_id, _count) in &heroes {
             let hero_id = *hero_id as i32;
 
@@ -106,6 +112,7 @@ pub async fn on_read_mail(
                 );
             } else {
                 database::db::game::heroes::create_hero(pool, player_id, hero_id).await?;
+                new_heroes.push(hero_id);
                 tracing::info!("User {} received new hero {} from mail", player_id, hero_id);
             }
         }
@@ -130,18 +137,51 @@ pub async fn on_read_mail(
         .await?;
 
         tracing::info!(
-            "User {} claimed mail {} rewards: {} items, {} currencies, {} equips, {} heroes, {} power items",
+            "User {} claimed mail {} rewards: {} items, {} currencies, {} equips, {} heroes, {} power items, {} insight selectors",
             player_id,
             incr_id,
             items.len(),
             currencies.len(),
             equips.len(),
             heroes.len(),
-            power_items.len()
+            power_items.len(),
+            insight_selectors.len()
         );
 
-        (player_id, attachment, item_ids, currency_ids, equip_ids)
+        (
+            player_id,
+            attachment,
+            item_ids,
+            currency_ids,
+            equip_ids,
+            new_heroes,
+        )
     };
+
+    if !new_heroes.is_empty() {
+        let ctx_guard = ctx.lock().await;
+        let pool = &ctx_guard.state.db;
+        let mut hero_infos = Vec::new();
+
+        for hero_id in new_heroes {
+            if let Ok(hero) =
+                database::db::game::heroes::get_hero_by_hero_id(pool, user_id, hero_id).await
+            {
+                hero_infos.push(hero.into());
+            }
+        }
+        drop(ctx_guard);
+
+        if !hero_infos.is_empty() {
+            let hero_push = sonettobuf::HeroUpdatePush {
+                hero_updates: hero_infos,
+            };
+            let mut ctx_guard = ctx.lock().await;
+            ctx_guard
+                .send_push(CmdId::HeroHeroUpdatePushCmd, hero_push)
+                .await?;
+        }
+    }
 
     let reply = ReadMailReply {
         incr_id: Some(incr_id),
@@ -155,7 +195,7 @@ pub async fn on_read_mail(
     }
 
     if !changed_items.is_empty() {
-        push::send_item_change_push(ctx.clone(), user_id, changed_items).await?;
+        push::send_item_change_push(ctx.clone(), user_id, changed_items, vec![], vec![]).await?;
     }
 
     if !changed_currencies.is_empty() {
@@ -167,7 +207,7 @@ pub async fn on_read_mail(
     }
 
     let mut material_changes = Vec::new();
-    let (items, currencies, equips, heroes_parsed, power_items_parsed) =
+    let (items, currencies, equips, heroes_parsed, power_items_parsed, insight_selectors_parsed) =
         crate::state::parse_store_product(&attachment);
 
     for (item_id, amount) in items {
@@ -184,6 +224,9 @@ pub async fn on_read_mail(
     }
     for (power_item_id, amount) in power_items_parsed {
         material_changes.push((10, power_item_id, amount));
+    }
+    for (insight_selector_id, amount) in insight_selectors_parsed {
+        material_changes.push((24, insight_selector_id, amount));
     }
 
     if !material_changes.is_empty() {

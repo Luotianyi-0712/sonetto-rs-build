@@ -85,8 +85,14 @@ pub async fn on_hero_upgrade_skill(
         (hero, dupe_item_id, player_id)
     };
 
-    crate::utils::push::send_item_change_push(ctx.clone(), player_id, vec![consumed_item_id])
-        .await?;
+    crate::utils::push::send_item_change_push(
+        ctx.clone(),
+        player_id,
+        vec![consumed_item_id],
+        vec![],
+        vec![],
+    )
+    .await?;
 
     let data = HeroUpgradeSkillReply {};
 

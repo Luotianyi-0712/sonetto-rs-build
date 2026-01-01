@@ -130,13 +130,6 @@ impl PlayerState {
         self.updated_at = now_ms;
     }
 
-    pub fn can_claim_month_card(&self, now_ms: i64) -> bool {
-        match self.last_month_card_claim_timestamp {
-            Some(ts) => ServerTime::server_day(ts) != ServerTime::server_day(now_ms),
-            None => true,
-        }
-    }
-
     pub fn claim_month_card(&mut self, now_ms: i64) {
         self.month_card_claimed = true;
         self.last_month_card_claim_timestamp = Some(now_ms);
