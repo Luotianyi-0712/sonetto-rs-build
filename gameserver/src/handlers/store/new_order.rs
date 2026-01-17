@@ -1,0 +1,292 @@
+use crate::error::AppError;
+use crate::network::packet::ClientPacket;
+use crate::state::ConnectionContext;
+use crate::util::inventory::{add_currencies, add_items};
+use crate::util::push;
+use prost::Message;
+use sonettobuf::{CmdId, NewOrderReply, NewOrderRequest, OrderCompletePush, StatInfoPush};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub async fn on_new_order(
+    ctx: Arc<Mutex<ConnectionContext>>,
+    req: ClientPacket,
+) -> Result<(), AppError> {
+    let request = NewOrderRequest::decode(&req.data[..])?;
+    tracing::info!("Received NewOrderRequest: {:?}", request);
+
+    let goods_id = request.id.ok_or(AppError::InvalidRequest)?;
+    let selection_infos = request.selection_infos;
+
+    let now = common::time::ServerTime::now_ms();
+    let game_order_id = now as i64;
+
+    let (
+        user_id,
+        attachment,
+        changed_items,
+        changed_currencies,
+        first_charge,
+        total_charge,
+        user_tag,
+    ) = {
+        let conn = ctx.lock().await;
+        let player_id = conn.player_id.ok_or(AppError::NotLoggedIn)?;
+        let pool = &conn.state.db;
+
+        let game_data = data::exceldb::get();
+        let charge_pack = game_data
+            .store_charge_goods
+            .iter()
+            .find(|g| g.id == goods_id)
+            .ok_or(AppError::InvalidRequest)?;
+
+        let mut all_items = charge_pack.item.clone();
+
+        for selection in &selection_infos {
+            let region_id = selection.region_id.unwrap_or(0);
+            let selection_pos = selection.selection_pos.unwrap_or(0);
+
+            if let Some(optional) = game_data
+                .store_charge_optional
+                .iter()
+                .find(|o| o.goods_id == goods_id && o.id == region_id)
+            {
+                let item_choices: Vec<&str> = optional.items.split('|').collect();
+
+                if let Some(selected_item) = item_choices.get(selection_pos as usize) {
+                    if !all_items.is_empty() {
+                        all_items.push('|');
+                    }
+                    all_items.push_str(selected_item);
+
+                    tracing::info!(
+                        "User {} selected option region={} pos={} (index {}): {}",
+                        player_id,
+                        region_id,
+                        selection_pos,
+                        selection_pos,
+                        selected_item
+                    );
+                } else {
+                    tracing::warn!(
+                        "User {} invalid selection: region={} pos={} out of {} options",
+                        player_id,
+                        region_id,
+                        selection_pos,
+                        item_choices.len()
+                    );
+                }
+            }
+        }
+
+        let attachment = all_items.clone();
+
+        let (items, currencies, equips, heroes, power_items) =
+            crate::state::parse_store_product(&all_items);
+
+        let item_ids = if !items.is_empty() {
+            add_items(pool, player_id, &items).await?
+        } else {
+            vec![]
+        };
+
+        let currency_ids = if !currencies.is_empty() {
+            add_currencies(pool, player_id, &currencies).await?
+        } else {
+            vec![]
+        };
+
+        if !power_items.is_empty() {
+            database::db::game::items::add_power_items(
+                pool,
+                player_id,
+                &power_items
+                    .iter()
+                    .map(|(id, count)| (*id as i32, *count))
+                    .collect::<Vec<_>>(),
+            )
+            .await?;
+        }
+
+        if !equips.is_empty() {
+            database::db::game::equipment::add_equipments(
+                pool,
+                player_id,
+                &equips
+                    .iter()
+                    .map(|(id, count)| (*id as i32, *count))
+                    .collect::<Vec<_>>(),
+            )
+            .await?;
+        }
+
+        for (hero_id, _count) in &heroes {
+            let hero_id = *hero_id as i32;
+            if !database::db::game::heroes::has_hero(pool, player_id, hero_id).await? {
+                database::db::game::heroes::create_hero(pool, player_id, hero_id).await?;
+                tracing::info!(
+                    "User {} received new hero {} from charge pack",
+                    player_id,
+                    hero_id
+                );
+            }
+        }
+
+        let (current_buy_count, current_first_charge): (i32, i32) = sqlx::query_as(
+            "SELECT buy_count, first_charge FROM user_charge_info WHERE user_id = ? AND charge_id = ?"
+        )
+        .bind(player_id)
+        .bind(goods_id)
+        .fetch_optional(pool)
+        .await?
+        .unwrap_or((0, 0));
+
+        let new_buy_count = current_buy_count + 1;
+        let new_first_charge = if current_first_charge == 0 && new_buy_count == 1 {
+            1
+        } else {
+            current_first_charge
+        };
+
+        sqlx::query(
+            "UPDATE user_charge_info
+             SET buy_count = ?, first_charge = ?, updated_at = ?
+             WHERE user_id = ? AND charge_id = ?",
+        )
+        .bind(new_buy_count)
+        .bind(new_first_charge)
+        .bind(now)
+        .bind(player_id)
+        .bind(goods_id)
+        .execute(pool)
+        .await?;
+
+        let (stats_first_charge, mut total_charge_amount, user_tag): (i32, i64, String) = sqlx::query_as(
+            "SELECT first_charge, total_charge_amount, user_tag FROM user_stats WHERE user_id = ?"
+        )
+        .bind(player_id)
+        .fetch_one(pool)
+        .await?;
+
+        let charge_amount = (charge_pack.price * 100.0) as i64;
+        total_charge_amount += charge_amount;
+
+        let new_stats_first_charge = if stats_first_charge == 0 {
+            1
+        } else {
+            stats_first_charge
+        };
+
+        sqlx::query(
+            "UPDATE user_stats
+             SET first_charge = ?, total_charge_amount = ?
+             WHERE user_id = ?",
+        )
+        .bind(new_stats_first_charge)
+        .bind(total_charge_amount)
+        .bind(player_id)
+        .execute(pool)
+        .await?;
+
+        tracing::info!(
+            "User {} purchased charge pack {} (price: ${}, total: ${:.2}, first_charge: {})",
+            player_id,
+            goods_id,
+            charge_pack.price,
+            total_charge_amount as f64 / 100.0,
+            new_stats_first_charge
+        );
+
+        (
+            player_id,
+            attachment,
+            item_ids,
+            currency_ids,
+            new_stats_first_charge == 1,
+            total_charge_amount,
+            user_tag,
+        )
+    };
+
+    let reply = NewOrderReply {
+        id: Some(goods_id),
+        pass_back_param: Some("".to_string()),
+        notify_url: Some("".to_string()),
+        game_order_id: Some(game_order_id),
+        timestamp: Some(now as i64),
+        sign: Some("03f92726ce15e0793dddd7f1a9db39f28".to_string()),
+        server_id: Some(4),
+        currency: request.origin_currency.clone(),
+    };
+
+    {
+        let mut conn = ctx.lock().await;
+        conn.send_reply(CmdId::NewOrderCmd, reply, 0, req.up_tag)
+            .await?;
+    }
+
+    if !changed_items.is_empty() {
+        push::send_item_change_push(ctx.clone(), user_id, changed_items).await?;
+    }
+
+    if !changed_currencies.is_empty() {
+        push::send_currency_change_push(ctx.clone(), user_id, changed_currencies).await?;
+    }
+
+    let complete_push = OrderCompletePush {
+        id: Some(goods_id),
+        game_order_id: Some(game_order_id),
+    };
+
+    {
+        let mut conn = ctx.lock().await;
+        conn.notify(CmdId::OrderCompletePushCmd, complete_push)
+            .await?;
+    }
+
+    let stat_push = StatInfoPush {
+        frist_charge: Some(first_charge),
+        total_charge_amount: Some(total_charge),
+        is_first_login: Some(false),
+        player_info: None,
+        user_tag: Some(user_tag),
+    };
+
+    {
+        let mut conn = ctx.lock().await;
+        conn.notify(CmdId::StatInfoPushCmd, stat_push).await?;
+    }
+
+    let mut material_changes = Vec::new();
+    let (items, currencies, equips, heroes, power_items) =
+        crate::state::parse_store_product(&attachment);
+
+    for (item_id, amount) in items {
+        material_changes.push((1, item_id, amount));
+    }
+    for (currency_id, amount) in currencies {
+        material_changes.push((2, currency_id as u32, amount));
+    }
+    for (equip_id, amount) in equips {
+        material_changes.push((9, equip_id, amount));
+    }
+    for (hero_id, amount) in heroes {
+        material_changes.push((4, hero_id, amount));
+    }
+    for (power_item_id, amount) in power_items {
+        material_changes.push((10, power_item_id, amount));
+    }
+
+    if !material_changes.is_empty() {
+        push::send_material_change_push(ctx.clone(), material_changes, Some(27)).await?;
+    }
+
+    tracing::info!(
+        "Auto-completed order {} for goods {}",
+        game_order_id,
+        goods_id
+    );
+
+    Ok(())
+}

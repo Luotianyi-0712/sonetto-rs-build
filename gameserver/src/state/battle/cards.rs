@@ -4,6 +4,8 @@ use sqlx::SqlitePool;
 use crate::error::AppError;
 use data::exceldb;
 use database::db::game::heroes;
+use std::collections::HashMap;
+use once_cell::sync::Lazy;
 use sonettobuf::{CardInfo, CardInfoPush, FightGroup};
 
 // Core deck generation
@@ -49,8 +51,6 @@ pub async fn generate_initial_deck(
     })
 }
 
-
-
 #[allow(dead_code)]
 fn draw_cards_no_merge(candidates: Vec<CardInfo>, max_cards: usize) -> Vec<CardInfo> {
     let mut rng = thread_rng();
@@ -71,6 +71,21 @@ fn compute_max_cards(hero_count: usize) -> usize {
     (hero_count * 3).min(9)
 }
 
+static TRIAL_UID_MAP: Lazy<HashMap<i64, i32>> = Lazy::new(|| {
+    let game_data = exceldb::get();
+    let mut map = HashMap::new();
+
+    let trial_heroes: Vec<_> = game_data.hero_trial.iter().collect();
+
+    for (index, trial) in trial_heroes.iter().enumerate() {
+        let uid = -((index + 1) as i64); // -1, -2, -3, ...
+        map.insert(uid, trial.id);
+        tracing::debug!("Trial mapping: UID {} -> trial_id {}", uid, trial.id);
+    }
+
+    map
+});
+
 async fn build_candidate_pool(
     pool: &SqlitePool,
     user_id: i64,
@@ -80,41 +95,53 @@ async fn build_candidate_pool(
     let game_data = exceldb::get();
 
     for &hero_uid in hero_uids {
+        if hero_uid == 0 {
+            continue; // Skip empty slots
+        }
+
         let hero_id = if hero_uid < 0 {
-            // Trial hero - load from static data
-            let trial_id = hero_uid.abs() as i32;
+            // === TRIAL HERO PATH - NO DATABASE ACCESS ===
+            let trial_id = TRIAL_UID_MAP
+                .get(&hero_uid)
+                .ok_or_else(|| {
+                    tracing::error!("Unknown trial hero UID: {}", hero_uid);
+                    AppError::InvalidRequest
+                })?;
+
             let trial_data = game_data
                 .hero_trial
                 .iter()
-                .find(|t| t.id == trial_id)
+                .find(|t| t.id == *trial_id)
                 .ok_or_else(|| {
-                    tracing::error!("Trial hero {} not found in static data", trial_id);
+                    tracing::error!("Trial data not found for ID {}", trial_id);
                     AppError::InvalidRequest
                 })?;
 
             tracing::info!(
-                "Loading trial hero {}: hero_id={}, level={}, skin={}",
+                "Trial hero: UID {} -> trial_id {} -> hero_id {}",
+                hero_uid,
                 trial_id,
-                trial_data.hero_id,
-                trial_data.level,
-                trial_data.skin
+                trial_data.hero_id
             );
 
             trial_data.hero_id
         } else {
-            // Regular hero - load from database
+            // === REGULAR HERO PATH - USE DATABASE ===
             let hero = heroes::get_hero_by_hero_uid(pool, user_id, hero_uid as i32).await?;
             hero.record.hero_id
         };
 
-        for skill_id in get_hero_skills(hero_id) {
+        // Get skills from static data (works for both trial and regular heroes)
+        let skills = get_hero_skills(hero_id);
+
+        for skill_id in skills {
             pool_cards.push(CardInfo {
                 uid: Some(hero_uid),
                 hero_id: Some(hero_id),
                 skill_id: Some(skill_id),
-                card_type: Some(0), // rank 1
+                card_type: Some(0),
                 status: Some(0),
-                temp_card: Some(hero_uid < 0), // Mark trial hero cards as temp
+                temp_card: Some(hero_uid < 0), // Mark trial hero cards
                 enchants: vec![],
                 target_uid: Some(0),
                 energy: Some(0),
@@ -177,7 +204,6 @@ fn draw_cards_with_merge(candidates: Vec<CardInfo>, max_cards: usize) -> Vec<Car
 
 fn get_hero_skills(hero_id: i32) -> Vec<i32> {
     let game_data = exceldb::get();
-
 
     let character = game_data.character.iter().find(|c| c.id == hero_id);
 

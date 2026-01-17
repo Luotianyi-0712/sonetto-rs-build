@@ -78,7 +78,6 @@ pub fn emit_table_store(
     out.push("        };".into());
     out.push("".into());
 
-
     if has_id_index || has_group_index {
         if has_id_index {
             out.push("        let mut by_id = HashMap::with_capacity(records.len());".into());
@@ -92,7 +91,6 @@ pub fn emit_table_store(
 
         out.push("".into());
         out.push("        for (idx, record) in records.iter().enumerate() {".into());
-
 
         if let Some(id_field) = &id_field {
             let id_snake = camel_to_snake(id_field);

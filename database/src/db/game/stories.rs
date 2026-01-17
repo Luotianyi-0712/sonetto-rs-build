@@ -1,10 +1,9 @@
 use crate::models::game::stories::ProcessingStory;
 use anyhow::Result;
 use sqlx::SqlitePool;
-
 pub async fn get_finished_stories(pool: &SqlitePool, user_id: i64) -> Result<Vec<i32>> {
     let stories = sqlx::query_scalar(
-        "SELECT story_id FROM user_finished_stories WHERE user_id = ? ORDER BY story_id"
+        "SELECT story_id FROM user_finished_stories WHERE user_id = ? ORDER BY story_id",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -12,9 +11,12 @@ pub async fn get_finished_stories(pool: &SqlitePool, user_id: i64) -> Result<Vec
     Ok(stories)
 }
 
-pub async fn get_processing_stories(pool: &SqlitePool, user_id: i64) -> Result<Vec<ProcessingStory>> {
+pub async fn get_processing_stories(
+    pool: &SqlitePool,
+    user_id: i64,
+) -> Result<Vec<ProcessingStory>> {
     let stories = sqlx::query_as::<_, ProcessingStory>(
-        "SELECT * FROM user_processing_stories WHERE user_id = ? ORDER BY story_id"
+        "SELECT * FROM user_processing_stories WHERE user_id = ? ORDER BY story_id",
     )
     .bind(user_id)
     .fetch_all(pool)

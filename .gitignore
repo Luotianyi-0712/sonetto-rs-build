@@ -2,3 +2,4 @@
 *.proto
 sonetto-rs.zip
 /data/excel2json/
+/db

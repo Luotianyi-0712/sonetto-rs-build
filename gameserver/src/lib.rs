@@ -1,4 +1,5 @@
 pub mod error;
-pub mod packet;
+pub mod handlers;
+pub mod network;
 pub mod state;
-pub mod utils;
+pub mod util;

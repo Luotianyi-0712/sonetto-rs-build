@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const CONFIG_TEMPLATE: &str = include_str!("../config.toml");
+const CONFIG_TEMPLATE: &str = include_str!("../Config.toml");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {

@@ -22,3 +22,4 @@ anyhow.workspace = true
 data.workspace = true
 chrono.workspace = true
 rand.workspace = true
+once_cell.workspace = true

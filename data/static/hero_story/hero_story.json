@@ -82,287 +82,91 @@
       "challengeWave": 0,
       "challengeMaxWave": 7,
       "getChallengeReward": false,
-      "unlock": true
+      "unlock": false
     },
     {
       "getScoreBonus": [],
       "dispatchInfos": [],
       "storyId": 8,
-      "progress": 7,
-      "getReward": true,
+      "progress": 0,
+      "getReward": false,
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 7,
       "getChallengeReward": false,
-      "unlock": true
+      "unlock": false
     },
     {
       "getScoreBonus": [],
       "dispatchInfos": [],
       "storyId": 9,
-      "progress": 8,
-      "getReward": true,
+      "progress": 0,
+      "getReward": false,
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
       "getScoreBonus": [],
       "dispatchInfos": [],
       "storyId": 10,
-      "progress": 8,
-      "getReward": true,
+      "progress": 0,
+      "getReward": false,
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [
-        2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060
-      ],
-      "dispatchInfos": [
-        {
-          "heroIds": [3062, 3047, 3032, 3022],
-          "id": 20002,
-          "endTime": 1728640090000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3084, 3070, 3082, 3071],
-          "id": 20008,
-          "endTime": 1728640083000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3048, 3004, 3013, 3034],
-          "id": 20007,
-          "endTime": 1728640096000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3020, 3049, 3037, 3013],
-          "id": 10122,
-          "endTime": 1728525193000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3053, 3009, 3038, 3014],
-          "id": 10121,
-          "endTime": 1728525184000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3070, 3076, 3035, 3086],
-          "id": 10124,
-          "endTime": 1728525215000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3017, 3058, 3042, 3005],
-          "id": 10123,
-          "endTime": 1728525202000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3028, 3055, 3027, 3088],
-          "id": 10125,
-          "endTime": 1728525223000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 11,
-      "progress": 6,
-      "getReward": true,
-      "score": 10000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [
-        1056, 1057, 1058, 1059, 1060, 1051, 1052, 1053, 1054, 1055
-      ],
-      "dispatchInfos": [
-        {
-          "heroIds": [3079, 3066, 3022, 3076],
-          "id": 10112,
-          "endTime": 1729369381000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3007, 3004, 3003, 3023],
-          "id": 10111,
-          "endTime": 1729369374000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3039, 3060, 3006, 3009],
-          "id": 10114,
-          "endTime": 1729369393000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3088, 3052, 3051, 3080],
-          "id": 10113,
-          "endTime": 1729369386000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3086, 3047, 3010, 3057],
-          "id": 10115,
-          "endTime": 1729369401000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3056, 3039, 3009, 3003],
-          "id": 20004,
-          "endTime": 1729451203000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3023, 3041, 3086, 3053],
-          "id": 20003,
-          "endTime": 1729451209000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3084, 3062, 3032, 3047],
-          "id": 20002,
-          "endTime": 1729451197000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 12,
-      "progress": 8,
-      "getReward": true,
-      "score": 10000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [
-        1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070
-      ],
-      "dispatchInfos": [
-        {
-          "heroIds": [3080, 3056, 3039, 3009],
-          "id": 20004,
-          "endTime": 1731003046000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3063, 3086, 3056, 3007],
-          "id": 20012,
-          "endTime": 1730965213000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3009, 3038, 3028, 3015],
-          "id": 10131,
-          "endTime": 1730773749000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3095, 3066, 3048, 3063],
-          "id": 10133,
-          "endTime": 1730788354000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3039, 3025, 3004, 3076],
-          "id": 10132,
-          "endTime": 1730773755000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3095, 3088, 3084, 3020],
-          "id": 10135,
-          "endTime": 1730834685000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3066, 3009, 3091, 3016],
-          "id": 10134,
-          "endTime": 1730834677000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 13,
-      "progress": 6,
-      "getReward": true,
-      "score": 10000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [2064, 2065, 2066, 2067, 2061, 2062, 2063],
-      "dispatchInfos": [
-        {
-          "heroIds": [3053, 3066, 3048, 3025],
-          "id": 20010,
-          "endTime": 1733051926000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3025, 3004, 3010, 3071],
-          "id": 10141,
-          "endTime": 1732135225000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3062, 3052, 3064, 3060],
-          "id": 10143,
-          "endTime": 1732135239000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3086, 3079, 3066, 3023],
-          "id": 10142,
-          "endTime": 1732135232000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3024, 3016, 3011, 3014],
-          "id": 10145,
-          "endTime": 1732135254000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3028, 3027, 3095, 3009],
-          "id": 10144,
-          "endTime": 1732135247000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [],
-          "id": 20002,
-          "endTime": 0,
-          "gainReward": false
-        },
-        {
-          "heroIds": [3070, 3084, 3071, 3082],
-          "id": 20008,
-          "endTime": 1732199990000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 14,
-      "progress": 6,
-      "getReward": true,
-      "score": 7000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
       "getScoreBonus": [],
@@ -373,7 +177,7 @@
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
+      "getChallengeReward": false,
       "unlock": false
     },
     {
@@ -385,20 +189,20 @@
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
+      "getChallengeReward": false,
       "unlock": false
     },
     {
       "getScoreBonus": [],
       "dispatchInfos": [],
       "storyId": 17,
-      "progress": 8,
-      "getReward": true,
+      "progress": 0,
+      "getReward": false,
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
       "getScoreBonus": [],
@@ -409,8 +213,8 @@
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
       "getScoreBonus": [],
@@ -421,7 +225,7 @@
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
+      "getChallengeReward": false,
       "unlock": false
     },
     {
@@ -433,250 +237,68 @@
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
+      "getChallengeReward": false,
       "unlock": false
     },
     {
       "getScoreBonus": [],
       "dispatchInfos": [],
       "storyId": 21,
-      "progress": 8,
-      "getReward": true,
+      "progress": 0,
+      "getReward": false,
       "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [
-        1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129, 1130
-      ],
-      "dispatchInfos": [
-        {
-          "heroIds": [3088, 3048, 3025, 3082],
-          "id": 20014,
-          "endTime": 1749409858000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3095, 3081, 3017, 3064],
-          "id": 20011,
-          "endTime": 1749409897000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3081, 3052, 3063, 3032],
-          "id": 10221,
-          "endTime": 1749164794000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3098, 3039, 3017, 3011],
-          "id": 10223,
-          "endTime": 1749164807000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3086, 3080, 3091, 3023],
-          "id": 10222,
-          "endTime": 1749164801000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3086, 3084, 3051, 3007],
-          "id": 10225,
-          "endTime": 1749235173000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3114, 3062, 3009, 3056],
-          "id": 10224,
-          "endTime": 1749235165000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3062, 3052, 3056, 3072],
-          "id": 20006,
-          "endTime": 1749376180000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 22,
-      "progress": 8,
-      "getReward": true,
-      "score": 10000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [
-        1136, 1137, 1138, 1139, 1140, 1131, 1132, 1133, 1134, 1135
-      ],
-      "dispatchInfos": [
-        {
-          "heroIds": [3062, 3056, 3072, 3022],
-          "id": 20006,
-          "endTime": 1752263029000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [],
-          "id": 20013,
-          "endTime": 0,
-          "gainReward": false
-        },
-        {
-          "heroIds": [3086, 3079, 3053, 3052],
-          "id": 20018,
-          "endTime": 1752219017000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3025, 3004, 3023, 3028],
-          "id": 10231,
-          "endTime": 1752064765000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3086, 3062, 3056, 3039],
-          "id": 10233,
-          "endTime": 1752065130000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3081, 3113, 3080, 3053],
-          "id": 10232,
-          "endTime": 1752064979000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3114, 3104, 3098, 3081],
-          "id": 10235,
-          "endTime": 1752144382000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3079, 3052, 3066, 3007],
-          "id": 10234,
-          "endTime": 1752089732000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 23,
-      "progress": 8,
-      "getReward": true,
-      "score": 10000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148],
-      "dispatchInfos": [
-        {
-          "heroIds": [3062, 3052, 3072, 3022],
-          "id": 20006,
-          "endTime": 1759532759000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3117, 3009, 3025, 3073],
-          "id": 10241,
-          "endTime": 1758805178000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3070, 3084, 3082, 3041],
-          "id": 20008,
-          "endTime": 1759532753000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3108, 3048, 3107, 3072],
-          "id": 10243,
-          "endTime": 1758805832000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3114, 3116, 3102, 3066],
-          "id": 10242,
-          "endTime": 1758805825000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3113, 3104, 3079, 3070],
-          "id": 10245,
-          "endTime": 1758963413000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3117, 3025, 3107, 3073],
-          "id": 10244,
-          "endTime": 1759111664000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3087, 3080, 3009, 3056],
-          "id": 20016,
-          "endTime": 1759530904000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 24,
-      "progress": 8,
-      "getReward": true,
-      "score": 8000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
-      "getScoreBonus": [1152, 1153, 1154, 1155, 1151],
-      "dispatchInfos": [
-        {
-          "heroIds": [3120, 3104, 3088, 3063],
-          "id": 10251,
-          "endTime": 1762532597000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3053, 3009, 3003, 3032],
-          "id": 10253,
-          "endTime": 1762533637000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3052, 3051, 3039, 3075],
-          "id": 10252,
-          "endTime": 1762533630000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3108, 3097, 3095, 3082],
-          "id": 10255,
-          "endTime": 1762614370000,
-          "gainReward": true
-        },
-        {
-          "heroIds": [3098, 3062, 3113, 3048],
-          "id": 10254,
-          "endTime": 1762614364000,
-          "gainReward": true
-        }
-      ],
+      "getScoreBonus": [],
+      "dispatchInfos": [],
       "storyId": 25,
-      "progress": 7,
-      "getReward": true,
-      "score": 5000,
+      "progress": 0,
+      "getReward": false,
+      "score": 0,
       "challengeWave": 0,
       "challengeMaxWave": 0,
-      "getChallengeReward": true,
-      "unlock": true
+      "getChallengeReward": false,
+      "unlock": false
     },
     {
       "getScoreBonus": [],
@@ -691,7 +313,7 @@
       "unlock": false
     }
   ],
-  "newStoryList": [26],
+  "newStoryList": [],
   "times": [
     {
       "storyId": 1,

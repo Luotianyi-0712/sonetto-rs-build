@@ -53,7 +53,7 @@ impl ServerTime {
         let dt = Self::adjusted_datetime(timestamp_ms);
         dt.weekday().num_days_from_sunday() as i32
     }
-    
+
     #[inline]
     pub fn server_month(timestamp_ms: i64) -> i32 {
         let dt = Self::adjusted_datetime(timestamp_ms);
@@ -68,7 +68,6 @@ impl ServerTime {
 }
 
 impl ServerTime {
-
     pub fn server_date() -> DateTime<Utc> {
         let now = Self::now_ms();
         Self::adjusted_datetime(now)

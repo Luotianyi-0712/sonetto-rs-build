@@ -1,5 +1,5 @@
-use sqlx::FromRow;
 use sonettobuf;
+use sqlx::FromRow;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct UserWeekwalkInfo {

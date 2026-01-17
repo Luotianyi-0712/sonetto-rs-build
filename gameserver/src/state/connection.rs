@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 use crate::error::AppError;
-use crate::utils::common::{encode_message, send_raw_server_message};
+use crate::util::common::{encode_message, send_raw_server_message};
 use sonettobuf::CmdId;
 
 use super::{AppState, CommandPacket, PlayerState};
@@ -239,7 +239,7 @@ impl ConnectionContext {
         self.send_queue.push_back(packet);
     }
 
-    pub async fn send_push<T: Message>(&mut self, cmd_id: CmdId, msg: T) -> Result<(), AppError> {
+    pub async fn notify<T: Message>(&mut self, cmd_id: CmdId, msg: T) -> Result<(), AppError> {
         let body = encode_message(&msg)?;
         let down_tag = self.state.reserve_down_tag().await;
 

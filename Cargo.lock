@@ -656,6 +656,7 @@ dependencies = [
  "dashmap",
  "data",
  "database",
+ "once_cell",
  "prost",
  "protocol",
  "rand",

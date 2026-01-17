@@ -9,8 +9,8 @@ mod player;
 pub use app::AppState;
 pub use battle::{
     BattleContext, create_battle, default_max_ap, end_fight::send_end_fight_push,
-    generate_auto_opers, generate_initial_deck,
-    rewards::generate_dungeon_rewards, simulator::BattleSimulator,
+    generate_auto_opers, generate_initial_deck, rewards::generate_dungeon_rewards,
+    simulator::BattleSimulator,
 };
 pub use connection::{ActiveBattle, ConnectionContext};
 pub use gacha::{

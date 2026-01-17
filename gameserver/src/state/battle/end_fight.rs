@@ -55,10 +55,8 @@ pub async fn send_end_fight_push(
         is_record: Some(is_record), // Use the parameter
     };
 
-    let mut ctx_guard = ctx.lock().await;
-    ctx_guard
-        .send_push(CmdId::FightEndFightPushCmd, push)
-        .await?;
+    let mut conn = ctx.lock().await;
+    conn.notify(CmdId::FightEndFightPushCmd, push).await?;
 
     Ok(())
 }

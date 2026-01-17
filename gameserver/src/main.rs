@@ -1,5 +1,5 @@
 use crate::{
-    client::handle_client,
+    network::client::handle_client,
     state::{AppState, ConnectionContext},
 };
 use common::{config, excel_data_directory, game_port, host, init_config, init_tracing};
@@ -11,13 +11,11 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tracing::info;
 
-mod client;
-mod cmd;
 mod error;
-mod handler;
-mod packet;
+mod handlers;
+mod network;
 mod state;
-mod utils;
+mod util;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -75,14 +73,14 @@ async fn main() -> anyhow::Result<()> {
 
             let result = handle_client(ctx.clone()).await;
 
-            let ctx_guard = ctx.lock().await;
-            if let Some(player_id) = ctx_guard.player_id {
-                if let Err(e) = ctx_guard.save_current_player_state().await {
+            let conn = ctx.lock().await;
+            if let Some(player_id) = conn.player_id {
+                if let Err(e) = conn.save_current_player_state().await {
                     tracing::error!("Failed to save player state for {}: {}", player_id, e);
                 }
 
                 tracing::warn!("Player {} disconnected and saved progress", player_id);
-                ctx_guard.state.unregister_session(player_id);
+                conn.state.unregister_session(player_id);
             }
 
             if let Err(e) = result {

@@ -42,7 +42,6 @@ impl From<BlockInfo> for sonettobuf::BlockInfo {
     }
 }
 
-
 #[derive(Debug, Clone, FromRow)]
 pub struct BlockPackage {
     pub user_id: i64,
