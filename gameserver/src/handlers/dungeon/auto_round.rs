@@ -162,7 +162,7 @@ pub async fn on_auto_round(
 
     let updated_dungeon = get_user_dungeon(&pool, player_id, chapter_id, episode_id).await?;
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let chapter_type = game_data
         .chapter
         .iter()

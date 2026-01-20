@@ -1,5 +1,5 @@
 use anyhow::Result;
-use data::exceldb;
+use codegen::configs;
 use sonettobuf::effect_type_enum::EffectType;
 use sonettobuf::{
     ActEffect, BuffInfo, FightEntityInfo, FightHurtInfo, FightStep, fight_hurt_info, fight_step,
@@ -30,7 +30,7 @@ impl SkillExecutor {
         buff_mgr: &BuffMgr,
     ) -> Result<FightStep> {
         let mut effects = Vec::new();
-        let game_data = exceldb::get();
+        let game_data = configs::get();
 
         let skill_data = game_data.skill_effect.iter().find(|s| s.id == skill_id);
 
@@ -164,7 +164,7 @@ impl SkillExecutor {
         behavior: &str,
         behavior_target: i32,
     ) -> Result<Vec<ActEffect>> {
-        let game_data = exceldb::get();
+        let game_data = configs::get();
 
         // Parse behavior: "id#param1#param2#param3..."
         let parts: Vec<&str> = behavior.split('#').collect();
@@ -545,7 +545,7 @@ impl SkillExecutor {
     }
 
     fn create_buff_effect(&self, caster_uid: i64, target_id: i64, buff_id: i32) -> ActEffect {
-        let duration = data::exceldb::get()
+        let duration = codegen::configs::get()
             .skill_buff
             .iter()
             .find(|b| b.id == buff_id)
@@ -573,7 +573,7 @@ impl SkillExecutor {
     }
 
     fn get_condition(&self, skill_id: i32, index: i32) -> String {
-        let game_data = exceldb::get();
+        let game_data = configs::get();
         let skill = game_data.skill_effect.iter().find(|s| s.id == skill_id);
         let Some(skill) = skill else {
             return String::new();
@@ -605,7 +605,7 @@ impl SkillExecutor {
     }
 
     fn get_condition_target(&self, skill_id: i32, index: i32) -> i32 {
-        let game_data = exceldb::get();
+        let game_data = configs::get();
         let skill = game_data.skill_effect.iter().find(|s| s.id == skill_id);
         let Some(skill) = skill else { return 0 };
 
@@ -635,7 +635,7 @@ impl SkillExecutor {
     }
 
     fn get_behavior(&self, skill_id: i32, index: i32) -> String {
-        let game_data = exceldb::get();
+        let game_data = configs::get();
         let skill = game_data.skill_effect.iter().find(|s| s.id == skill_id);
         let Some(skill) = skill else {
             return String::new();
@@ -667,7 +667,7 @@ impl SkillExecutor {
     }
 
     fn get_behavior_target(&self, skill_id: i32, index: i32) -> i32 {
-        let game_data = exceldb::get();
+        let game_data = configs::get();
         let skill = game_data.skill_effect.iter().find(|s| s.id == skill_id);
         let Some(skill) = skill else { return 0 };
 

@@ -12,9 +12,10 @@ use crate::{
 use database::db::game::activity101;
 use prost::Message;
 use sonettobuf::{
-    Act101Info, Act160GetInfoReply, Act165GetInfoReply, CmdId, Get101BonusReply,
-    Get101BonusRequest, Get101InfosReply, Get101InfosRequest, GetAct125InfosReply,
-    GetAct125InfosRequest, GetAct208InfoReply, GetAct209InfoReply, GetActivityInfosReply,
+    Act101Info, Act160GetInfoReply, Act165GetInfoReply, Act212BonusNo, Act212InfoNo, CmdId,
+    Get101BonusReply, Get101BonusRequest, Get101InfosReply, Get101InfosRequest,
+    GetAct125InfosReply, GetAct125InfosRequest, GetAct208InfoReply, GetAct209InfoReply,
+    GetAct212InfoReply, GetAct212InfoRequest, GetActivityInfosReply,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -230,6 +231,30 @@ pub async fn on_act160_get_info(
         Act160GetInfoReply,
         "activity160/get_info.json"
     );
+    Ok(())
+}
+
+pub async fn on_act212_get_info(
+    ctx: Arc<Mutex<ConnectionContext>>,
+    req: ClientPacket,
+) -> Result<(), AppError> {
+    let reply = GetAct212InfoReply {
+        act212_info: Some(Act212InfoNo {
+            activity_id: Some(13119),
+            is_active: Some(false),
+            bonuss: vec![
+                Act212BonusNo {
+                    id: None,
+                    status: None,
+                },
+            ],
+            end_time: Some(0), // 2030-01-01 00:00:00 UTC
+        }),
+    };
+
+    let mut conn = ctx.lock().await;
+    conn.send_reply(CmdId::GetAct212InfoCmd, reply, 0, req.up_tag)
+        .await?;
     Ok(())
 }
 

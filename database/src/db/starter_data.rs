@@ -1,37 +1,152 @@
-use data::exceldb;
+use codegen::configs;
+use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 
-/// Load minimal critter info (one starter)
+/// Load CritterInfo starter data from critter_info.json
 pub async fn load_critter_info(tx: &mut Transaction<'_, Sqlite>, uid: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/critter_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_critter_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let array = match data.get("critterInfos").and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None => {
+            eprintln!("load_critter_info: invalid or missing 'critterInfos' array");
+            return Ok(());
+        }
+    };
+
     let now = common::time::ServerTime::now_ms();
-    let critter_uid = 10000000i64;
-    sqlx::query(
-        r#"
-        INSERT INTO critters (
-            uid, player_id, define_id, create_time,
-            efficiency, patience, lucky,
-            efficiency_incr_rate, patience_incr_rate, lucky_incr_rate,
-            special_skin, current_mood, is_locked, finish_train, is_high_quality,
-            train_hero_id, total_finish_count, name,
-            created_at, updated_at
-        ) VALUES (?, ?, 1, ?, 100, 100, 100, 10, 10, 10, false, 50, false, false, false, 0, 0, 'Starter Critter', ?, ?)
-        "#,
-    )
-    .bind(critter_uid)
-    .bind(uid)
-    .bind(now)
-    .bind(now)
-    .bind(now)
-    .execute(&mut **tx)
-    .await?;
+
+    // Starting seed for critter UIDs - ignore the uid field in JSON
+    let mut critter_uid = 10000000i64;
+
+    for entry in array {
+        // Note: We ignore entry.get("uid") and use our own counter
+        let define_id = entry
+            .get("defineId")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default();
+
+        // Insert main critter record with generated UID
+        sqlx::query(
+            r#"
+            INSERT INTO critters (
+                uid, player_id, define_id, create_time,
+                efficiency, patience, lucky,
+                efficiency_incr_rate, patience_incr_rate, lucky_incr_rate,
+                special_skin, current_mood, is_locked, finish_train, is_high_quality,
+                train_hero_id, total_finish_count, name,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(critter_uid) // Generated UID, not from JSON
+        .bind(uid)
+        .bind(define_id)
+        .bind(now) // Fresh timestamp
+        .bind(entry.get("efficiency").and_then(|v| v.as_i64()))
+        .bind(entry.get("patience").and_then(|v| v.as_i64()))
+        .bind(entry.get("lucky").and_then(|v| v.as_i64()))
+        .bind(entry.get("efficiencyIncrRate").and_then(|v| v.as_i64()))
+        .bind(entry.get("patienceIncrRate").and_then(|v| v.as_i64()))
+        .bind(entry.get("luckyIncrRate").and_then(|v| v.as_i64()))
+        .bind(
+            entry
+                .get("specialSkin")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(entry.get("currentMood").and_then(|v| v.as_i64()))
+        .bind(entry.get("lock").and_then(|v| v.as_bool()).unwrap_or(false))
+        .bind(
+            entry
+                .get("finishTrain")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(
+            entry
+                .get("isHighQuality")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(entry.get("trainHeroId").and_then(|v| v.as_i64()))
+        .bind(entry.get("totalFinishCount").and_then(|v| v.as_i64()))
+        .bind(entry.get("name").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+
+        // Insert skill tags
+        if let Some(skill_info) = entry.get("skillInfo").and_then(|v| v.as_object()) {
+            if let Some(tags) = skill_info.get("tags").and_then(|v| v.as_array()) {
+                for (i, tag) in tags.iter().enumerate() {
+                    if let Some(tag_str) = tag.as_str() {
+                        sqlx::query(
+                            "INSERT INTO critter_skills (critter_uid, tag, sort_order) VALUES (?, ?, ?)"
+                        )
+                        .bind(critter_uid)
+                        .bind(tag_str)
+                        .bind(i as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+        }
+
+        // Insert tag attribute rates
+        if let Some(attr_rates) = entry.get("tagAttributeRates").and_then(|v| v.as_array()) {
+            for attr in attr_rates {
+                sqlx::query(
+                    "INSERT INTO critter_tag_attributes (critter_uid, attribute_id, rate) VALUES (?, ?, ?)"
+                )
+                .bind(critter_uid)
+                .bind(attr.get("attributeId").and_then(|v| v.as_i64()))
+                .bind(attr.get("rate").and_then(|v| v.as_i64()))
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+
+        // Insert rest info if present
+        if let Some(rest_info) = entry.get("restInfo").and_then(|v| v.as_object()) {
+            sqlx::query(
+                "INSERT INTO critter_rest_info (critter_uid, building_uid, rest_slot_id) VALUES (?, ?, ?)"
+            )
+            .bind(critter_uid)
+            .bind(rest_info.get("buildingUid").and_then(|v| v.as_i64()))
+            .bind(rest_info.get("restSlotId").and_then(|v| v.as_i64()))
+            .execute(&mut **tx)
+            .await?;
+        }
+
+        // Increment UID for next critter
+        critter_uid += 1;
+    }
+
+    tracing::info!(
+        "Loaded {} critters for uid {} starting from UID 10000000",
+        array.len(),
+        uid
+    );
     Ok(())
 }
 
-/// Load basic player info + show heroes
+/// Load default player info for new user
 pub async fn load_player_info(tx: &mut Transaction<'_, Sqlite>, uid: i64) -> sqlx::Result<()> {
     let now = common::time::ServerTime::now_ms();
+
+    // Create player_info record
     sqlx::query(
         "INSERT INTO player_info (
             player_id, signature, birthday, portrait, show_achievement, bg,
@@ -39,20 +154,34 @@ pub async fn load_player_info(tx: &mut Transaction<'_, Sqlite>, uid: i64) -> sql
             hero_rare_nn_count, hero_rare_n_count, hero_rare_r_count,
             hero_rare_sr_count, hero_rare_ssr_count,
             created_at, updated_at
-        ) VALUES (?, 'Welcome to Sonetto!', '', 171603, '', 0, 1, 0, NULL, 1, 1, 1, 0, 0, ?, ?)",
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
     )
     .bind(uid)
+    .bind("Not a whale") // Default signature
+    .bind("")
+    .bind(171603)
+    .bind("") // show achievement
+    .bind(0) // bg
+    .bind(0) // total_login_days
+    .bind(0)
+    .bind(None::<i64>)
+    .bind(0) //hero_rare_nn_count
+    .bind(0) //hero_rare_n_count
+    .bind(0) //hero_rare_r_count
+    .bind(0) // hero_rare_sr_count
+    .bind(0) // hero_rare_ssr_count
     .bind(now)
     .bind(now)
     .execute(&mut **tx)
     .await?;
 
-    // Default show heroes (3 as in original)
+    // Add default show heroes (3 heroes for profile display)
     let default_heroes = [
         (3086, 180, 4, 5, 308603),
         (3120, 180, 4, 5, 312002),
         (3095, 180, 4, 5, 309502),
     ];
+
     for (i, (hero_id, level, rank, ex_skill_level, skin)) in default_heroes.iter().enumerate() {
         sqlx::query(
             "INSERT INTO player_show_heroes
@@ -79,7 +208,7 @@ pub async fn load_hero_list(
     uid: i64,
     equip_map: &HashMap<i32, i64>,
 ) -> sqlx::Result<()> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let now = common::time::ServerTime::now_ms();
 
     // Starting seed for hero UIDs
@@ -346,7 +475,7 @@ pub async fn load_hero_list(
         // They unlock through leveling/breakthrough
 
         // Get all voices for this character from character_voice table
-        let character_voices: Vec<&data::exceldb::character_voice::CharacterVoice> = game_data
+        let character_voices: Vec<&codegen::character_voice::CharacterVoice> = game_data
             .character_voice
             .iter()
             .filter(|v| v.hero_id == hero_id)
@@ -596,7 +725,7 @@ pub async fn load_equipment(
     tx: &mut Transaction<'_, Sqlite>,
     uid: i64,
 ) -> sqlx::Result<HashMap<i32, i64>> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let now = common::time::ServerTime::now_ms();
 
     // Starting seed for equipment UIDs
@@ -664,7 +793,7 @@ pub async fn load_starter_items(
     tx: &mut Transaction<'_, Sqlite>,
     user_id: i64,
 ) -> sqlx::Result<()> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let now = common::time::ServerTime::now_ms();
 
     static POWER_ITEM_UID_COUNTER: AtomicI64 = AtomicI64::new(40000000);
@@ -763,7 +892,7 @@ pub async fn load_starter_items(
         .bind(user_id)
         .bind(power_item.id)
         .bind(1)
-        .bind(expire_time as i32)
+        .bind(expire_time)
         .bind(now)
         .execute(&mut **tx)
         .await?;
@@ -816,7 +945,7 @@ pub async fn load_starter_currencies(
     tx: &mut Transaction<'_, Sqlite>,
     user_id: i64,
 ) -> sqlx::Result<()> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let now = common::time::ServerTime::now_ms();
 
     let currencies: Vec<_> = game_data.currency.iter().collect();
@@ -858,7 +987,7 @@ pub async fn load_starter_guides(
     tx: &mut Transaction<'_, Sqlite>,
     user_id: i64,
 ) -> sqlx::Result<()> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     // Load all guides from excel data, set to completed (step_id = -1)
     let guides: Vec<_> = game_data
@@ -887,7 +1016,6 @@ pub async fn load_starter_guides(
     Ok(())
 }
 
-/// Load user stats (fixes the "User stats not found" error)
 pub async fn load_starter_user_stats(
     tx: &mut Transaction<'_, Sqlite>,
     user_id: i64,
@@ -898,44 +1026,3255 @@ pub async fn load_starter_user_stats(
     )
     .bind(user_id)
     .bind(false)
-    .bind(0)
-    .bind(true)
+    .bind(590614)
+    .bind(false)
     .bind("用户类型7")
     .execute(&mut **tx)
     .await?;
+
+    tracing::info!("Loaded starter user stats for user {}", user_id);
+
+    Ok(())
+}
+
+pub async fn load_starter_hero_groups(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let now = common::time::ServerTime::now_ms();
+
+    // Load hero_group_common_list.json
+    let common_json = include_str!("../../../assets/static/heros/hero_group_common_list.json");
+    let common_data: Value = match serde_json::from_str(common_json) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "load_starter_hero_groups: failed to parse common JSON: {}",
+                e
+            );
+            return Ok(());
+        }
+    };
+
+    // Load common groups
+    if let Some(groups) = common_data
+        .get("heroGroupCommons")
+        .and_then(|v| v.as_array())
+    {
+        for group in groups {
+            let group_id = group.get("groupId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let name = group.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let cloth_id = group.get("clothId").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+            let assist_boss_id = group
+                .get("assistBossId")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+
+            // Insert group
+            let group_result = sqlx::query(
+                "INSERT INTO hero_groups_common (user_id, group_id, name, cloth_id, assist_boss_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+            )
+            .bind(user_id)
+            .bind(group_id)
+            .bind(name)
+            .bind(cloth_id)
+            .bind(assist_boss_id)
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+
+            let db_group_id = group_result.last_insert_rowid();
+
+            // Add heroes
+            if let Some(hero_list) = group.get("heroList").and_then(|v| v.as_array()) {
+                for (position, hero_uid) in hero_list.iter().enumerate() {
+                    if let Some(uid) = hero_uid.as_i64() {
+                        sqlx::query(
+                            "INSERT INTO hero_group_members (hero_group_id, hero_uid, position) VALUES (?, ?, ?)"
+                        )
+                        .bind(db_group_id)
+                        .bind(uid)
+                        .bind(position as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+
+            // Add equips
+            if let Some(equips) = group.get("equips").and_then(|v| v.as_array()) {
+                for equip in equips {
+                    let index = equip.get("index").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                    if let Some(equip_uids) = equip.get("equipUid").and_then(|v| v.as_array()) {
+                        for equip_uid in equip_uids {
+                            if let Some(uid) = equip_uid.as_i64() {
+                                sqlx::query(
+                                    "INSERT INTO hero_group_equips (hero_group_id, index_slot, equip_uid) VALUES (?, ?, ?)"
+                                )
+                                .bind(db_group_id)
+                                .bind(index)
+                                .bind(uid)
+                                .execute(&mut **tx)
+                                .await?;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add activity104 equips
+            if let Some(equips) = group.get("activity104Equips").and_then(|v| v.as_array()) {
+                for equip in equips {
+                    let index = equip.get("index").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                    if let Some(equip_uids) = equip.get("equipUid").and_then(|v| v.as_array()) {
+                        for equip_uid in equip_uids {
+                            if let Some(uid) = equip_uid.as_i64() {
+                                sqlx::query(
+                                    "INSERT INTO hero_group_activity104_equips (hero_group_id, index_slot, equip_uid) VALUES (?, ?, ?)"
+                                )
+                                .bind(db_group_id)
+                                .bind(index)
+                                .bind(uid)
+                                .execute(&mut **tx)
+                                .await?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Load hero group types
+    if let Some(types) = common_data.get("heroGourpTypes").and_then(|v| v.as_array()) {
+        for type_info in types {
+            let type_id = type_info.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let current_select = type_info
+                .get("currentSelect")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+
+            // Get group_id from groupInfo if present
+            let group_id = type_info
+                .get("groupInfo")
+                .and_then(|info| info.get("groupId"))
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32);
+
+            sqlx::query(
+                "INSERT INTO hero_group_types (user_id, type_id, current_select, group_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)"
+            )
+            .bind(user_id)
+            .bind(type_id)
+            .bind(current_select)
+            .bind(group_id)
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    tracing::info!("Loaded hero groups from JSON for user {}", user_id);
+    Ok(())
+}
+
+pub async fn load_hero_group_snapshots(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let now = common::time::ServerTime::now_ms();
+
+    let json_str = include_str!("../../../assets/static/heros/hero_group_snapshots.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_hero_group_snapshots: failed to parse JSON: {}", e);
+            return Ok(());
+        }
+    };
+
+    let snapshots = match data.get("heroGroupSnapshots").and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None => {
+            eprintln!("load_hero_group_snapshots: missing 'heroGroupSnapshots' array");
+            return Ok(());
+        }
+    };
+
+    for snapshot in snapshots {
+        let snapshot_id = snapshot
+            .get("snapshotId")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+
+        // Insert main snapshot
+        sqlx::query(
+            "INSERT INTO hero_group_snapshots (user_id, snapshot_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(user_id)
+        .bind(snapshot_id)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+
+        // Get the DB snapshot ID
+        let db_snapshot_id: i64 = sqlx::query_scalar(
+            "SELECT id FROM hero_group_snapshots WHERE user_id = ? AND snapshot_id = ?",
+        )
+        .bind(user_id)
+        .bind(snapshot_id)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        // Insert each group in the snapshot
+        if let Some(groups) = snapshot
+            .get("heroGroupSnapshots")
+            .and_then(|v| v.as_array())
+        {
+            for group in groups {
+                let group_id = group.get("groupId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let name = group.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let cloth_id = group.get("clothId").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+                let assist_boss_id = group
+                    .get("assistBossId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
+
+                let group_result = sqlx::query(
+                    "INSERT INTO hero_group_snapshot_groups (snapshot_id, group_id, name, cloth_id, assist_boss_id)
+                     VALUES (?, ?, ?, ?, ?)"
+                )
+                .bind(db_snapshot_id)
+                .bind(group_id)
+                .bind(name)
+                .bind(cloth_id)
+                .bind(assist_boss_id)
+                .execute(&mut **tx)
+                .await?;
+
+                let snapshot_group_id = group_result.last_insert_rowid();
+
+                // Insert heroes
+                if let Some(hero_list) = group.get("heroList").and_then(|v| v.as_array()) {
+                    for (position, hero_uid) in hero_list.iter().enumerate() {
+                        if let Some(uid) = hero_uid.as_i64() {
+                            sqlx::query(
+                                "INSERT INTO hero_group_snapshot_members (snapshot_group_id, hero_uid, position)
+                                 VALUES (?, ?, ?)"
+                            )
+                            .bind(snapshot_group_id)
+                            .bind(uid)
+                            .bind(position as i32)
+                            .execute(&mut **tx)
+                            .await?;
+                        }
+                    }
+                }
+
+                // Insert equips
+                if let Some(equips) = group.get("equips").and_then(|v| v.as_array()) {
+                    for equip in equips {
+                        let index = equip.get("index").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                        if let Some(equip_uids) = equip.get("equipUid").and_then(|v| v.as_array()) {
+                            for equip_uid in equip_uids {
+                                if let Some(uid) = equip_uid.as_i64() {
+                                    sqlx::query(
+                                        "INSERT INTO hero_group_snapshot_equips (snapshot_group_id, index_slot, equip_uid)
+                                         VALUES (?, ?, ?)"
+                                    )
+                                    .bind(snapshot_group_id)
+                                    .bind(index)
+                                    .bind(uid)
+                                    .execute(&mut **tx)
+                                    .await?;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Insert activity104 equips
+                if let Some(equips) = group.get("activity104Equips").and_then(|v| v.as_array()) {
+                    for equip in equips {
+                        let index = equip.get("index").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                        if let Some(equip_uids) = equip.get("equipUid").and_then(|v| v.as_array()) {
+                            for equip_uid in equip_uids {
+                                if let Some(uid) = equip_uid.as_i64() {
+                                    sqlx::query(
+                                        "INSERT INTO hero_group_snapshot_activity104_equips (snapshot_group_id, index_slot, equip_uid)
+                                         VALUES (?, ?, ?)"
+                                    )
+                                    .bind(snapshot_group_id)
+                                    .bind(index)
+                                    .bind(uid)
+                                    .execute(&mut **tx)
+                                    .await?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Insert sort IDs
+        if let Some(sort_ids) = snapshot.get("sortSubIds").and_then(|v| v.as_array()) {
+            for (order, sub_id) in sort_ids.iter().enumerate() {
+                if let Some(id) = sub_id.as_i64() {
+                    sqlx::query(
+                        "INSERT INTO hero_group_snapshot_sort_ids (snapshot_id, sub_id, sort_order)
+                         VALUES (?, ?, ?)",
+                    )
+                    .bind(db_snapshot_id)
+                    .bind(id as i32)
+                    .bind(order as i32)
+                    .execute(&mut **tx)
+                    .await?;
+                }
+            }
+        }
+    }
+
+    tracing::info!(
+        "Loaded {} hero group snapshots for user {}",
+        snapshots.len(),
+        user_id
+    );
+    Ok(())
+}
+
+/// Load dungeon starter data from dungeon.json
+pub async fn load_dungeon_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/dungeon.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_dungeon_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load dungeon info list
+    if let Some(dungeon_list) = data.get("dungeonInfoList").and_then(|v| v.as_array()) {
+        for entry in dungeon_list {
+            sqlx::query(
+                r#"
+                INSERT INTO user_dungeons (
+                    user_id, chapter_id, episode_id, star, challenge_count,
+                    has_record, left_return_all_num, today_pass_num, today_total_num,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(entry.get("chapterId").and_then(|v| v.as_i64()))
+            .bind(entry.get("episodeId").and_then(|v| v.as_i64()))
+            .bind(entry.get("star").and_then(|v| v.as_i64()))
+            .bind(entry.get("challengeCount").and_then(|v| v.as_i64()))
+            .bind(
+                entry
+                    .get("hasRecord")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            )
+            .bind(entry.get("leftReturnAllNum").and_then(|v| v.as_i64()))
+            .bind(entry.get("todayPassNum").and_then(|v| v.as_i64()))
+            .bind(entry.get("todayTotalNum").and_then(|v| v.as_i64()))
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load last hero groups (store references to existing hero groups)
+    if let Some(last_groups) = data.get("lastHeroGroup").and_then(|v| v.as_array()) {
+        for entry in last_groups {
+            let chapter_id = entry.get("chapterId").and_then(|v| v.as_i64()).unwrap_or(0);
+
+            if let Some(snapshot) = entry.get("heroGroupSnapshot").and_then(|v| v.as_object()) {
+                let group_id = snapshot
+                    .get("groupId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1);
+
+                sqlx::query(
+                    r#"
+                    INSERT INTO dungeon_last_hero_groups (
+                        user_id, chapter_id, hero_group_id, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    "#,
+                )
+                .bind(user_id)
+                .bind(chapter_id as i32)
+                .bind(group_id as i32)
+                .bind(now)
+                .bind(now)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    // Load map IDs
+    if let Some(map_ids) = data.get("mapIds").and_then(|v| v.as_array()) {
+        for map_id in map_ids {
+            if let Some(id) = map_id.as_i64() {
+                sqlx::query("INSERT INTO user_dungeon_maps (user_id, map_id) VALUES (?, ?)")
+                    .bind(user_id)
+                    .bind(id as i32)
+                    .execute(&mut **tx)
+                    .await?;
+            }
+        }
+    }
+
+    // Load elements
+    if let Some(elements) = data.get("elements").and_then(|v| v.as_array()) {
+        for element in elements {
+            if let Some(id) = element.as_i64() {
+                sqlx::query(
+                    "INSERT INTO user_dungeon_elements (user_id, element_id, is_finished) VALUES (?, ?, 0)"
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    // Load finished elements
+    if let Some(finished) = data.get("finishElements").and_then(|v| v.as_array()) {
+        for element in finished {
+            if let Some(id) = element.as_i64() {
+                sqlx::query(
+                    "INSERT INTO user_dungeon_elements (user_id, element_id, is_finished) VALUES (?, ?, 1)"
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    // Load reward point info
+    if let Some(reward_points) = data.get("rewardPointInfo").and_then(|v| v.as_array()) {
+        for entry in reward_points {
+            let chapter_id = entry.get("chapterId").and_then(|v| v.as_i64()).unwrap_or(0);
+
+            sqlx::query(
+                r#"
+                INSERT INTO user_dungeon_reward_points (
+                    user_id, chapter_id, reward_point, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(chapter_id as i32)
+            .bind(entry.get("rewardPoint").and_then(|v| v.as_i64()))
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+
+            // Load claimed reward IDs
+            if let Some(claimed) = entry.get("hasGetPointRewardIds").and_then(|v| v.as_array()) {
+                for reward_id in claimed {
+                    if let Some(id) = reward_id.as_i64() {
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_dungeon_claimed_rewards (
+                                user_id, chapter_id, point_reward_id
+                            ) VALUES (?, ?, ?)
+                            "#,
+                        )
+                        .bind(user_id)
+                        .bind(chapter_id as i32)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Load equip special chapters
+    if let Some(equip_sp) = data.get("equipSpChapters").and_then(|v| v.as_array()) {
+        for chapter in equip_sp {
+            if let Some(id) = chapter.as_i64() {
+                sqlx::query(
+                    "INSERT INTO user_dungeon_equip_sp_chapters (user_id, chapter_id) VALUES (?, ?)"
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    // Load chapter type nums
+    if let Some(chapter_types) = data.get("chapterTypeNums").and_then(|v| v.as_array()) {
+        for entry in chapter_types {
+            sqlx::query(
+                r#"
+                INSERT INTO user_chapter_type_nums (
+                    user_id, chapter_type, today_pass_num, today_total_num, last_reset_date
+                ) VALUES (?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(entry.get("chapterType").and_then(|v| v.as_i64()))
+            .bind(entry.get("todayPassNum").and_then(|v| v.as_i64()))
+            .bind(entry.get("todayTotalNum").and_then(|v| v.as_i64()))
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load finished puzzles
+    if let Some(puzzles) = data.get("finishPuzzles").and_then(|v| v.as_array()) {
+        for puzzle in puzzles {
+            if let Some(id) = puzzle.as_i64() {
+                sqlx::query(
+                    "INSERT INTO user_dungeon_finished_puzzles (user_id, puzzle_id) VALUES (?, ?)",
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    tracing::info!("Loaded dungeon info for user {}", user_id);
+    Ok(())
+}
+
+/// Load dungeon info
+pub async fn load_dungeon_infos(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let game_data = configs::get();
+    let now = common::time::ServerTime::now_ms();
+    let dungeon_infos: Vec<_> = game_data.episode.iter().collect();
+
+    for dungeon_info in dungeon_infos.clone() {
+        sqlx::query(
+            r#"
+            INSERT INTO user_dungeons (
+                user_id, chapter_id, episode_id, star, challenge_count,
+                has_record, left_return_all_num, today_pass_num, today_total_num,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, chapter_id, episode_id) DO UPDATE SET
+                star = excluded.star,
+                challenge_count = excluded.challenge_count,
+                has_record = excluded.has_record,
+                left_return_all_num = excluded.left_return_all_num,
+                today_pass_num = excluded.today_pass_num,
+                today_total_num = excluded.today_total_num,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(dungeon_info.chapter_id)
+        .bind(dungeon_info.id)
+        .bind(if dungeon_info.battle_id != 0 { 2 } else { 1 })
+        .bind(0)
+        .bind(false)
+        .bind(1)
+        .bind(0)
+        .bind(0)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    tracing::info!(
+        "Loaded dungeon infos {} for user {}",
+        dungeon_infos.len(),
+        user_id
+    );
+    Ok(())
+}
+
+/// Load story data
+pub async fn load_story_data(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/story/get_story.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_story_data: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load finished stories
+    if let Some(finish_list) = data.get("finishList").and_then(|v| v.as_array()) {
+        for story_id in finish_list {
+            if let Some(id) = story_id.as_i64() {
+                sqlx::query("INSERT INTO user_finished_stories (user_id, story_id) VALUES (?, ?)")
+                    .bind(user_id)
+                    .bind(id as i32)
+                    .execute(&mut **tx)
+                    .await?;
+            }
+        }
+    }
+
+    // Load processing stories
+    if let Some(processing_list) = data.get("processingList").and_then(|v| v.as_array()) {
+        for entry in processing_list {
+            sqlx::query(
+                r#"
+                INSERT INTO user_processing_stories (
+                    user_id, story_id, step_id, favor, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(entry.get("storyId").and_then(|v| v.as_i64()))
+            .bind(entry.get("stepId").and_then(|v| v.as_i64()))
+            .bind(entry.get("favor").and_then(|v| v.as_i64()))
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    tracing::info!("Loaded story data for user {}", user_id);
+    Ok(())
+}
+
+/// Load charge info
+pub async fn load_charge_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/charge/get_charge_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_charge_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load charge infos
+    if let Some(infos) = data.get("infos").and_then(|v| v.as_array()) {
+        for entry in infos {
+            sqlx::query(
+                r#"
+                INSERT INTO user_charge_info (
+                    user_id, charge_id, buy_count, first_charge, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(entry.get("id").and_then(|v| v.as_i64()))
+            .bind(entry.get("buyCount").and_then(|v| v.as_i64()))
+            .bind(
+                entry
+                    .get("firstCharge")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true),
+            )
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load sandbox settings
+    let sandbox_enable = data
+        .get("sandboxEnable")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let sandbox_balance = data
+        .get("sandboxBalance")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_sandbox_settings (user_id, sandbox_enable, sandbox_balance)
+        VALUES (?, ?, ?)
+        "#,
+    )
+    .bind(user_id)
+    .bind(sandbox_enable)
+    .bind(sandbox_balance as i32)
+    .execute(&mut **tx)
+    .await?;
+
+    tracing::info!("Loaded charge info for user {}", user_id);
+    Ok(())
+}
+
+/// Load block package info from block_package_info.json
+pub async fn load_block_package_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/room/block_package_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_block_package_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    // Load block package IDs
+    if let Some(packages) = data.get("blockPackageIds").and_then(|v| v.as_array()) {
+        for package_id in packages {
+            if let Some(id) = package_id.as_i64() {
+                sqlx::query(
+                    "INSERT INTO user_block_packages (user_id, block_package_id) VALUES (?, ?)",
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    // Load special blocks
+    if let Some(special_blocks) = data.get("specialBlocks").and_then(|v| v.as_array()) {
+        for entry in special_blocks {
+            sqlx::query(
+                "INSERT INTO user_special_blocks (user_id, block_id, create_time) VALUES (?, ?, ?)",
+            )
+            .bind(user_id)
+            .bind(entry.get("blockId").and_then(|v| v.as_i64()))
+            .bind(entry.get("createTime").and_then(|v| v.as_i64()))
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    tracing::info!("Loaded block package info for user {}", user_id);
+    Ok(())
+}
+
+/// Load building info from building_info.json
+pub async fn load_building_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/room/building_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_building_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+    let mut building_uid = 20000000i64; // Starting UID for buildings
+
+    if let Some(building_infos) = data.get("buildingInfos").and_then(|v| v.as_array()) {
+        for entry in building_infos {
+            sqlx::query(
+                r#"
+                INSERT INTO user_buildings (
+                    uid, user_id, define_id, in_use, x, y, rotate, level, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(building_uid)
+            .bind(user_id)
+            .bind(entry.get("defineId").and_then(|v| v.as_i64()))
+            .bind(entry.get("use").and_then(|v| v.as_bool()).unwrap_or(false))
+            .bind(entry.get("x").and_then(|v| v.as_i64()))
+            .bind(entry.get("y").and_then(|v| v.as_i64()))
+            .bind(entry.get("rotate").and_then(|v| v.as_i64()))
+            .bind(entry.get("level").and_then(|v| v.as_i64()))
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+
+            building_uid += 1;
+        }
+
+        tracing::info!(
+            "Loaded {} buildings for user {}",
+            building_infos.len(),
+            user_id
+        );
+    }
+
+    Ok(())
+}
+
+/// Load room info from room_info.json
+pub async fn load_room_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/room/room_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_room_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load block infos (placed blocks)
+    if let Some(infos) = data.get("infos").and_then(|v| v.as_array()) {
+        for entry in infos {
+            let block_id = entry.get("blockId").and_then(|v| v.as_i64()).unwrap_or(0);
+            if block_id == 0 {
+                continue;
+            }
+
+            sqlx::query(
+                "INSERT INTO user_blocks (user_id, block_id, x, y, rotate, water_type, block_color)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id, block_id) DO UPDATE SET
+                     x = excluded.x,
+                     y = excluded.y,
+                     rotate = excluded.rotate,
+                     water_type = excluded.water_type,
+                     block_color = excluded.block_color",
+            )
+            .bind(user_id)
+            .bind(block_id as i32)
+            .bind(entry.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("rotate").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("waterType").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(
+                entry
+                    .get("blockColor")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32,
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Get the last building UID for this user or start fresh
+    let last_building_uid: Option<i64> =
+        sqlx::query_scalar("SELECT MAX(uid) FROM user_buildings WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .flatten();
+
+    let mut building_uid = last_building_uid.map(|uid| uid + 1).unwrap_or(20000000);
+
+    // Load building infos
+    if let Some(buildings) = data.get("buildingInfos").and_then(|v| v.as_array()) {
+        for entry in buildings {
+            let define_id = entry.get("defineId").and_then(|v| v.as_i64()).unwrap_or(0);
+            if define_id == 0 {
+                continue;
+            }
+
+            sqlx::query(
+                "INSERT INTO user_buildings (uid, user_id, define_id, in_use, x, y, rotate, level, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(building_uid)
+            .bind(user_id)
+            .bind(define_id as i32)
+            .bind(entry.get("use").and_then(|v| v.as_bool()).unwrap_or(false))
+            .bind(entry.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("rotate").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("level").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(common::time::ServerTime::now_ms())
+            .bind(common::time::ServerTime::now_ms())
+            .execute(&mut **tx)
+            .await?;
+
+            building_uid += 1;
+        }
+    }
+
+    // Load block packages
+    if let Some(packages) = data.get("blockPackages").and_then(|v| v.as_array()) {
+        for entry in packages {
+            let package_id = entry
+                .get("blockPackageId")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            if package_id == 0 {
+                continue;
+            }
+
+            let unused: Vec<i32> = entry
+                .get("unUseBlockIds")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_i64().map(|n| n as i32))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let used: Vec<i32> = entry
+                .get("useBlockIds")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_i64().map(|n| n as i32))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let unused_json = serde_json::to_string(&unused).unwrap_or_else(|_| "[]".to_string());
+            let used_json = serde_json::to_string(&used).unwrap_or_else(|_| "[]".to_string());
+
+            sqlx::query(
+                "INSERT INTO user_block_packages (user_id, block_package_id, unused_block_ids, used_block_ids)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT(user_id, block_package_id) DO UPDATE SET
+                     unused_block_ids = excluded.unused_block_ids,
+                     used_block_ids = excluded.used_block_ids"
+            )
+            .bind(user_id)
+            .bind(package_id as i32)
+            .bind(unused_json)
+            .bind(used_json)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    let random_critter_uid: Option<i64> = sqlx::query_scalar(
+        "SELECT uid FROM critters WHERE player_id = ? ORDER BY RANDOM() LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    // Load road infos
+    if let Some(roads) = data.get("roadInfos").and_then(|v| v.as_array()) {
+        for entry in roads {
+            let road_id = entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+            if road_id == 0 {
+                continue;
+            }
+
+            let road_points: Vec<serde_json::Value> = entry
+                .get("roadPoints")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            let road_points_json =
+                serde_json::to_string(&road_points).unwrap_or_else(|_| "[]".to_string());
+
+            // Use random critter UID if one exists and JSON has a critter
+            let json_critter_uid = entry
+                .get("critterUid")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let actual_critter_uid = if json_critter_uid != 0 {
+                random_critter_uid.unwrap_or(0)
+            } else {
+                0
+            };
+
+            sqlx::query(
+                "INSERT INTO user_roads (user_id, id, from_type, to_type, road_points,
+                                         critter_uid, building_uid, building_define_id,
+                                         skin_id, block_clean_type)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id, id) DO UPDATE SET
+                     from_type = excluded.from_type,
+                     to_type = excluded.to_type,
+                     road_points = excluded.road_points,
+                     critter_uid = excluded.critter_uid,
+                     building_uid = excluded.building_uid,
+                     building_define_id = excluded.building_define_id,
+                     skin_id = excluded.skin_id,
+                     block_clean_type = excluded.block_clean_type",
+            )
+            .bind(user_id)
+            .bind(road_id as i32)
+            .bind(entry.get("fromType").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(entry.get("toType").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(road_points_json)
+            .bind(actual_critter_uid)
+            .bind(
+                entry
+                    .get("buildingUid")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                entry
+                    .get("buildingDefineId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32,
+            )
+            .bind(entry.get("skinId").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+            .bind(
+                entry
+                    .get("blockCleanType")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32,
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load room state
+    let is_reset = data
+        .get("isReset")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    sqlx::query(
+        "INSERT INTO user_room_state (user_id, is_reset, last_reset_time) VALUES (?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+             is_reset = excluded.is_reset,
+             last_reset_time = excluded.last_reset_time",
+    )
+    .bind(user_id)
+    .bind(is_reset)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    tracing::info!("Loaded room info for user {}", user_id);
+    Ok(())
+}
+
+/// Load character interaction info from character_interaction_info.json
+pub async fn load_character_interaction_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/room/character_interaction_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_character_interaction_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load interactions
+    if let Some(infos) = data.get("infos").and_then(|v| v.as_array()) {
+        for entry in infos {
+            let interaction_id = entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+            let is_finished = entry
+                .get("finish")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            sqlx::query(
+                r#"
+                INSERT INTO user_character_interactions (
+                    user_id, interaction_id, is_finished, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(interaction_id as i32)
+            .bind(is_finished)
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+
+            // Load select IDs
+            if let Some(select_ids) = entry.get("selectIds").and_then(|v| v.as_array()) {
+                for select_id in select_ids {
+                    if let Some(id) = select_id.as_i64() {
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_character_interaction_selections (
+                                user_id, interaction_id, select_id
+                            ) VALUES (?, ?, ?)
+                            "#,
+                        )
+                        .bind(user_id)
+                        .bind(interaction_id as i32)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Load interaction count
+    let interaction_count = data
+        .get("interactionCount")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    sqlx::query("INSERT INTO user_interaction_stats (user_id, interaction_count) VALUES (?, ?)")
+        .bind(user_id)
+        .bind(interaction_count as i32)
+        .execute(&mut **tx)
+        .await?;
+
+    tracing::info!("Loaded character interaction info for user {}", user_id);
+    Ok(())
+}
+
+pub async fn load_summon_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/summon/summon_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_summon_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load main summon stats
+    sqlx::query(
+        r#"
+        INSERT INTO user_summon_stats (
+            user_id, free_equip_summon, is_show_new_summon, new_summon_count, total_summon_count
+        ) VALUES (?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(user_id)
+    .bind(
+        data.get("freeEquipSummon")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    )
+    .bind(
+        data.get("isShowNewSummon")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    )
+    .bind(
+        data.get("newSummonCount")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+    )
+    .bind(
+        data.get("totalSummonCount")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Load pool infos
+    if let Some(pool_infos) = data.get("poolInfos").and_then(|v| v.as_array()) {
+        for pool_entry in pool_infos {
+            let pool_id = pool_entry
+                .get("poolId")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+
+            // Insert pool
+            sqlx::query(
+                r#"
+                INSERT INTO user_summon_pools (
+                    user_id, pool_id, online_time, offline_time, have_free, used_free_count,
+                    discount_time, can_get_guarantee_sr_count, guarantee_sr_countdown, summon_count,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(pool_id)
+            .bind(
+                pool_entry
+                    .get("onlineTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                pool_entry
+                    .get("offlineTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                pool_entry
+                    .get("haveFree")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            )
+            .bind(
+                pool_entry
+                    .get("usedFreeCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                pool_entry
+                    .get("discountTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                pool_entry
+                    .get("canGetGuaranteeSRCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                pool_entry
+                    .get("guaranteeSRCountDown")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                pool_entry
+                    .get("summonCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+
+            // Load lucky bag info
+            if let Some(lucky_bag) = pool_entry.get("luckyBagInfo").and_then(|v| v.as_object()) {
+                sqlx::query(
+                    r#"
+                    INSERT INTO user_lucky_bags (user_id, pool_id, count, not_ssr_count)
+                    VALUES (?, ?, ?, ?)
+                    "#,
+                )
+                .bind(user_id)
+                .bind(pool_id)
+                .bind(lucky_bag.get("count").and_then(|v| v.as_i64()).unwrap_or(0))
+                .bind(
+                    lucky_bag
+                        .get("notSSRCount")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .execute(&mut **tx)
+                .await?;
+
+                // Load single bag infos
+                if let Some(single_bags) =
+                    lucky_bag.get("singleBagInfos").and_then(|v| v.as_array())
+                {
+                    for bag_entry in single_bags {
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_single_bags (user_id, pool_id, bag_id, is_open)
+                            VALUES (?, ?, ?, ?)
+                            "#,
+                        )
+                        .bind(user_id)
+                        .bind(pool_id)
+                        .bind(bag_entry.get("bagId").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(
+                            bag_entry
+                                .get("isOpen")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        )
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+
+            // Load sp pool info
+            if let Some(sp_pool) = pool_entry.get("spPoolInfo").and_then(|v| v.as_object()) {
+                sqlx::query(
+                    r#"
+                    INSERT INTO user_sp_pool_info (
+                        user_id, pool_id, sp_type, limited_ticket_id, limited_ticket_num,
+                        open_time, used_first_ssr_guarantee
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    "#,
+                )
+                .bind(user_id)
+                .bind(pool_id)
+                .bind(sp_pool.get("type").and_then(|v| v.as_i64()).unwrap_or(0))
+                .bind(
+                    sp_pool
+                        .get("limitedTicketId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    sp_pool
+                        .get("limitedTicketNum")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    sp_pool
+                        .get("openTime")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    sp_pool
+                        .get("usedFirstSSRGuarantee")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                )
+                .execute(&mut **tx)
+                .await?;
+
+                // Load up hero IDs
+                if let Some(up_hero_ids) = sp_pool.get("UpHeroIds").and_then(|v| v.as_array()) {
+                    for hero_id in up_hero_ids {
+                        if let Some(id) = hero_id.as_i64() {
+                            sqlx::query(
+                                r#"
+                                INSERT INTO user_sp_pool_up_heroes (user_id, pool_id, hero_id)
+                                VALUES (?, ?, ?)
+                                "#,
+                            )
+                            .bind(user_id)
+                            .bind(pool_id)
+                            .bind(id as i32)
+                            .execute(&mut **tx)
+                            .await?;
+                        }
+                    }
+                }
+
+                // Load reward progresses
+                if let Some(progresses) = sp_pool
+                    .get("hasGetRewardProgresses")
+                    .and_then(|v| v.as_array())
+                {
+                    for progress_id in progresses {
+                        if let Some(id) = progress_id.as_i64() {
+                            sqlx::query(
+                                r#"
+                                INSERT INTO user_sp_pool_reward_progress (user_id, pool_id, progress_id)
+                                VALUES (?, ?, ?)
+                                "#
+                            )
+                            .bind(user_id)
+                            .bind(pool_id)
+                            .bind(id as i32)
+                            .execute(&mut **tx)
+                            .await?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::info!("Loaded summon info for user {}", user_id);
+    Ok(())
+}
+
+fn parse_datetime_to_unix_sec(s: &str) -> i64 {
+    use chrono::{NaiveDateTime, TimeZone, Utc};
+
+    match NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+        Ok(dt) => Utc.from_utc_datetime(&dt).timestamp(),
+        Err(_) => 0,
+    }
+}
+
+pub async fn load_summon_history(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/summon/summon_history.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_summon_history: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let Some(page_data) = data
+        .get("data")
+        .and_then(|v| v.get("pageData"))
+        .and_then(|v| v.as_array())
+    else {
+        tracing::warn!("load_summon_history: no pageData");
+        return Ok(());
+    };
+
+    for entry in page_data {
+        let pool_id = entry.get("poolId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let pool_type = entry.get("poolType").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let pool_name = entry
+            .get("poolName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let summon_type = entry
+            .get("summonType")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let summon_time = entry
+            .get("createTime")
+            .and_then(|v| v.as_str())
+            .map(parse_datetime_to_unix_sec)
+            .unwrap_or(0);
+
+        // Insert summon history row
+        let history_id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT OR IGNORE INTO user_summon_history (
+                user_id, pool_id, summon_type, pool_type, pool_name, summon_time
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+            "#,
+        )
+        .bind(user_id)
+        .bind(pool_id)
+        .bind(summon_type)
+        .bind(pool_type)
+        .bind(&pool_name)
+        .bind(summon_time)
+        .fetch_optional(&mut **tx)
+        .await?
+        // If ignored (duplicate), fetch existing id
+        .unwrap_or_else(|| {
+            // fallback query
+            0
+        });
+
+        if history_id == 0 {
+            continue;
+        }
+
+        // Insert gained items
+        if let Some(gain_ids) = entry.get("gainIds").and_then(|v| v.as_array()) {
+            for (idx, gain_id) in gain_ids.iter().enumerate() {
+                let Some(gain_id) = gain_id.as_i64() else {
+                    continue;
+                };
+
+                sqlx::query(
+                    r#"
+                    INSERT OR IGNORE INTO user_summon_history_items (
+                        history_id, result_index, gain_id
+                    )
+                    VALUES (?, ?, ?)
+                    "#,
+                )
+                .bind(history_id)
+                .bind(idx as i32)
+                .bind(gain_id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    tracing::info!("Loaded summon history for user {}", user_id);
+    Ok(())
+}
+
+/// Load achievement info from achievement_info.json
+pub async fn load_achievement_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/achievement/achievement_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_achievement_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    if let Some(infos) = data.get("infos").and_then(|v| v.as_array()) {
+        for entry in infos {
+            sqlx::query(
+                r#"
+                INSERT INTO user_achievements (
+                    user_id, achievement_id, progress, has_finish, is_new, finish_time, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                "#
+            )
+            .bind(user_id)
+            .bind(entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(entry.get("progress").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(entry.get("hasFinish").and_then(|v| v.as_bool()).unwrap_or(false))
+            .bind(entry.get("new").and_then(|v| v.as_bool()).unwrap_or(false))
+            .bind(entry.get("finishTime").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(now)
+            .bind(now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    tracing::info!("Loaded achievement info for user {}", user_id);
+    Ok(())
+}
+
+/// Load dialog info from dialog_info.json
+pub async fn load_dialog_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/dialog/dialog_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_dialog_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    if let Some(dialog_ids) = data.get("dialogIds").and_then(|v| v.as_array()) {
+        for dialog_id in dialog_ids {
+            if let Some(id) = dialog_id.as_i64() {
+                sqlx::query("INSERT INTO user_dialogs (user_id, dialog_id) VALUES (?, ?)")
+                    .bind(user_id)
+                    .bind(id as i32)
+                    .execute(&mut **tx)
+                    .await?;
+            }
+        }
+    }
+
+    tracing::info!("Loaded dialog info for user {}", user_id);
+    Ok(())
+}
+
+/// Load starter antiques from antique table
+pub async fn load_starter_antiques(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let game_data = codegen::configs::get();
+    let get_time = common::time::ServerTime::now_ms();
+
+    let antiques: Vec<_> = game_data.antique.iter().collect();
+
+    for antique in &antiques.clone() {
+        sqlx::query("INSERT INTO user_antiques (user_id, antique_id, get_time) VALUES (?, ?, ?)")
+            .bind(user_id)
+            .bind(antique.id)
+            .bind(get_time)
+            .execute(&mut **tx)
+            .await?;
+    }
+
+    tracing::info!("Loaded {} antiques for user {}", antiques.len(), user_id);
+    Ok(())
+}
+
+/// Load weekwalk info from week_walk_info.json
+pub async fn load_weekwalk_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/week_walk/week_walk_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_weekwalk_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let time_this_week = data
+        .get("timeThisWeek")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+
+    // Load main info
+    if let Some(info) = data.get("info").and_then(|v| v.as_object()) {
+        sqlx::query(
+            r#"
+            INSERT INTO user_weekwalk_info (
+                user_id, time, end_time, max_layer, issue_id,
+                is_pop_deep_rule, is_open_deep, is_pop_shallow_settle, is_pop_deep_settle,
+                deep_progress, time_this_week
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(user_id)
+        .bind(info.get("time").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(info.get("endTime").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(info.get("maxLayer").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(info.get("issueId").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(
+            info.get("isPopDeepRule")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(
+            info.get("isOpenDeep")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(
+            info.get("isPopShallowSettle")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(
+            info.get("isPopDeepSettle")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .bind(
+            info.get("deepProgress")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+        )
+        .bind(time_this_week)
+        .execute(&mut **tx)
+        .await?;
+
+        // Load maps
+        if let Some(maps) = info.get("mapInfo").and_then(|v| v.as_array()) {
+            for map_entry in maps {
+                let map_id = map_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+                // Insert map
+                sqlx::query(
+                    r#"
+                    INSERT INTO user_weekwalk_maps (
+                        user_id, map_id, scene_id, is_finish, is_finished, buff_id,
+                        is_show_buff, is_show_finished, is_show_select_cd
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    "#,
+                )
+                .bind(user_id)
+                .bind(map_id)
+                .bind(
+                    map_entry
+                        .get("sceneId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    map_entry
+                        .get("isFinish")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    map_entry
+                        .get("isFinished")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    map_entry
+                        .get("buffId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                )
+                .bind(
+                    map_entry
+                        .get("isShowBuff")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                )
+                .bind(
+                    map_entry
+                        .get("isShowFinished")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                )
+                .bind(
+                    map_entry
+                        .get("isShowSelectCd")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                )
+                .execute(&mut **tx)
+                .await?;
+
+                // Load battles
+                if let Some(battles) = map_entry.get("battleInfos").and_then(|v| v.as_array()) {
+                    for battle_entry in battles {
+                        let battle_id = battle_entry
+                            .get("battleId")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0) as i32;
+
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_weekwalk_battles (
+                                user_id, map_id, battle_id, star, max_star, hero_group_select, element_id
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            "#
+                        )
+                        .bind(user_id)
+                        .bind(map_id)
+                        .bind(battle_id)
+                        .bind(battle_entry.get("star").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(battle_entry.get("maxStar").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(battle_entry.get("heroGroupSelect").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(battle_entry.get("elementId").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .execute(&mut **tx)
+                        .await?;
+
+                        // Load hero IDs for battle
+                        if let Some(hero_ids) =
+                            battle_entry.get("heroIds").and_then(|v| v.as_array())
+                        {
+                            for hero_id in hero_ids {
+                                if let Some(id) = hero_id.as_i64() {
+                                    sqlx::query(
+                                        r#"
+                                        INSERT INTO user_weekwalk_battle_heroes (
+                                            user_id, map_id, battle_id, hero_id
+                                        ) VALUES (?, ?, ?, ?)
+                                        "#,
+                                    )
+                                    .bind(user_id)
+                                    .bind(map_id)
+                                    .bind(battle_id)
+                                    .bind(id as i32)
+                                    .execute(&mut **tx)
+                                    .await?;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Load elements
+                if let Some(elements) = map_entry.get("elementInfos").and_then(|v| v.as_array()) {
+                    for element_entry in elements {
+                        let element_id = element_entry
+                            .get("elementId")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0) as i32;
+
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_weekwalk_elements (
+                                user_id, map_id, element_id, is_finish, index_num, visible
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            "#,
+                        )
+                        .bind(user_id)
+                        .bind(map_id)
+                        .bind(element_id)
+                        .bind(
+                            element_entry
+                                .get("isFinish")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        )
+                        .bind(
+                            element_entry
+                                .get("index")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0),
+                        )
+                        .bind(
+                            element_entry
+                                .get("visible")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        )
+                        .execute(&mut **tx)
+                        .await?;
+
+                        // Load history list
+                        if let Some(history) =
+                            element_entry.get("historylist").and_then(|v| v.as_array())
+                        {
+                            for (i, history_entry) in history.iter().enumerate() {
+                                if let Some(entry_str) = history_entry.as_str() {
+                                    sqlx::query(
+                                        r#"
+                                        INSERT INTO user_weekwalk_element_history (
+                                            user_id, map_id, element_id, history_entry, sort_order
+                                        ) VALUES (?, ?, ?, ?, ?)
+                                        "#,
+                                    )
+                                    .bind(user_id)
+                                    .bind(map_id)
+                                    .bind(element_id)
+                                    .bind(entry_str)
+                                    .bind(i as i32)
+                                    .execute(&mut **tx)
+                                    .await?;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Load hero infos
+                if let Some(heroes) = map_entry.get("heroInfos").and_then(|v| v.as_array()) {
+                    for hero_entry in heroes {
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_weekwalk_heroes (
+                                user_id, map_id, hero_id, cd
+                            ) VALUES (?, ?, ?, ?)
+                            "#,
+                        )
+                        .bind(user_id)
+                        .bind(map_id)
+                        .bind(
+                            hero_entry
+                                .get("heroId")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0),
+                        )
+                        .bind(hero_entry.get("cd").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+
+                // Load story IDs
+                if let Some(story_ids) = map_entry.get("storyIds").and_then(|v| v.as_array()) {
+                    for story_id in story_ids {
+                        if let Some(id) = story_id.as_i64() {
+                            sqlx::query(
+                                r#"
+                                INSERT INTO user_weekwalk_stories (
+                                    user_id, map_id, story_id
+                                ) VALUES (?, ?, ?)
+                                "#,
+                            )
+                            .bind(user_id)
+                            .bind(map_id)
+                            .bind(id as i32)
+                            .execute(&mut **tx)
+                            .await?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::info!("Loaded weekwalk info for user {}", user_id);
+    Ok(())
+}
+
+/// Load weekwalk v2 info from week_walk_ver2_get_info.json
+pub async fn load_weekwalk_v2_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/week_walk/week_walk_ver2_get_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_weekwalk_v2_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    if let Some(info) = data.get("info").and_then(|v| v.as_object()) {
+        // Insert main info
+        sqlx::query(
+            r#"
+            INSERT INTO user_weekwalk_v2_info (user_id, time_id, start_time, end_time, pop_rule)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(user_id)
+        .bind(info.get("timeId").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(info.get("startTime").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(info.get("endTime").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(
+            info.get("popRule")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        )
+        .execute(&mut **tx)
+        .await?;
+
+        // Load layer infos
+        if let Some(layers) = info.get("layerInfos").and_then(|v| v.as_array()) {
+            for layer_entry in layers {
+                let layer_id = layer_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+                // Insert layer
+                sqlx::query(
+                    r#"
+                    INSERT INTO user_weekwalk_v2_layers (
+                        user_id, layer_id, scene_id, all_pass, finished, unlock, show_finished, params
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    "#
+                )
+                .bind(user_id)
+                .bind(layer_id)
+                .bind(layer_entry.get("sceneId").and_then(|v| v.as_i64()).unwrap_or(0))
+                .bind(layer_entry.get("allPass").and_then(|v| v.as_bool()).unwrap_or(false))
+                .bind(layer_entry.get("finished").and_then(|v| v.as_bool()).unwrap_or(false))
+                .bind(layer_entry.get("unlock").and_then(|v| v.as_bool()).unwrap_or(false))
+                .bind(layer_entry.get("showFinished").and_then(|v| v.as_bool()).unwrap_or(false))
+                .bind(layer_entry.get("params").and_then(|v| v.as_str()).unwrap_or(""))
+                .execute(&mut **tx)
+                .await?;
+
+                // Load battle infos
+                if let Some(battles) = layer_entry.get("battleInfos").and_then(|v| v.as_array()) {
+                    for battle_entry in battles {
+                        let battle_id = battle_entry
+                            .get("battleId")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0) as i32;
+
+                        // Insert battle
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_weekwalk_v2_battles (
+                                user_id, layer_id, battle_id, status, hero_group_select, element_id, params
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            "#
+                        )
+                        .bind(user_id)
+                        .bind(layer_id)
+                        .bind(battle_id)
+                        .bind(battle_entry.get("status").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(battle_entry.get("heroGroupSelect").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(battle_entry.get("elementId").and_then(|v| v.as_i64()).unwrap_or(0))
+                        .bind(battle_entry.get("params").and_then(|v| v.as_str()).unwrap_or(""))
+                        .execute(&mut **tx)
+                        .await?;
+
+                        // Load hero IDs
+                        if let Some(hero_ids) =
+                            battle_entry.get("heroIds").and_then(|v| v.as_array())
+                        {
+                            for hero_id in hero_ids {
+                                if let Some(id) = hero_id.as_i64() {
+                                    sqlx::query(
+                                        r#"
+                                        INSERT INTO user_weekwalk_v2_battle_heroes (
+                                            user_id, layer_id, battle_id, hero_id
+                                        ) VALUES (?, ?, ?, ?)
+                                        "#,
+                                    )
+                                    .bind(user_id)
+                                    .bind(layer_id)
+                                    .bind(battle_id)
+                                    .bind(id as i32)
+                                    .execute(&mut **tx)
+                                    .await?;
+                                }
+                            }
+                        }
+
+                        // Load choose skill IDs
+                        if let Some(skill_ids) = battle_entry
+                            .get("chooseSkillIds")
+                            .and_then(|v| v.as_array())
+                        {
+                            for skill_id in skill_ids {
+                                if let Some(id) = skill_id.as_i64() {
+                                    sqlx::query(
+                                        r#"
+                                        INSERT INTO user_weekwalk_v2_battle_skills (
+                                            user_id, layer_id, battle_id, skill_id
+                                        ) VALUES (?, ?, ?, ?)
+                                        "#,
+                                    )
+                                    .bind(user_id)
+                                    .bind(layer_id)
+                                    .bind(battle_id)
+                                    .bind(id as i32)
+                                    .execute(&mut **tx)
+                                    .await?;
+                                }
+                            }
+                        }
+
+                        // Load cup infos
+                        if let Some(cups) = battle_entry.get("cupInfos").and_then(|v| v.as_array())
+                        {
+                            for cup_entry in cups {
+                                sqlx::query(
+                                    r#"
+                                    INSERT INTO user_weekwalk_v2_cups (
+                                        user_id, layer_id, battle_id, cup_id, result
+                                    ) VALUES (?, ?, ?, ?, ?)
+                                    "#,
+                                )
+                                .bind(user_id)
+                                .bind(layer_id)
+                                .bind(battle_id)
+                                .bind(cup_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0))
+                                .bind(
+                                    cup_entry
+                                        .get("result")
+                                        .and_then(|v| v.as_i64())
+                                        .unwrap_or(0),
+                                )
+                                .execute(&mut **tx)
+                                .await?;
+                            }
+                        }
+                    }
+                }
+
+                // Load element infos
+                if let Some(elements) = layer_entry.get("elementInfos").and_then(|v| v.as_array()) {
+                    for element_entry in elements {
+                        sqlx::query(
+                            r#"
+                            INSERT INTO user_weekwalk_v2_elements (
+                                user_id, layer_id, element_id, finish, index_num, visible
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            "#,
+                        )
+                        .bind(user_id)
+                        .bind(layer_id)
+                        .bind(
+                            element_entry
+                                .get("elementId")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0),
+                        )
+                        .bind(
+                            element_entry
+                                .get("finish")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        )
+                        .bind(
+                            element_entry
+                                .get("index")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0),
+                        )
+                        .bind(
+                            element_entry
+                                .get("visible")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        )
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+        }
+
+        // Load previous settle info
+        if let Some(prev_settle) = info.get("prevSettle").and_then(|v| v.as_object()) {
+            sqlx::query(
+                r#"
+                INSERT INTO user_weekwalk_v2_prev_settle (
+                    user_id, max_layer_id, max_battle_id, max_battle_index, show
+                ) VALUES (?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(
+                prev_settle
+                    .get("maxLayerId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                prev_settle
+                    .get("maxBattleId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                prev_settle
+                    .get("maxBattleIndex")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                prev_settle
+                    .get("show")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            // Load settle layer infos
+            if let Some(settle_layers) = prev_settle.get("layerInfos").and_then(|v| v.as_array()) {
+                for settle_layer in settle_layers {
+                    sqlx::query(
+                        r#"
+                        INSERT INTO user_weekwalk_v2_prev_settle_layers (
+                            user_id, layer_id, platinum_cup_num
+                        ) VALUES (?, ?, ?)
+                        "#,
+                    )
+                    .bind(user_id)
+                    .bind(
+                        settle_layer
+                            .get("layerId")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0),
+                    )
+                    .bind(
+                        settle_layer
+                            .get("platinumCupNum")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0),
+                    )
+                    .execute(&mut **tx)
+                    .await?;
+                }
+            }
+        }
+
+        // Load snapshot infos
+        if let Some(snapshots) = info.get("snapshotInfos").and_then(|v| v.as_array()) {
+            for snapshot_entry in snapshots {
+                let snapshot_no = snapshot_entry
+                    .get("no")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
+
+                // Insert snapshot
+                sqlx::query(
+                    "INSERT INTO user_weekwalk_v2_snapshots (user_id, snapshot_no) VALUES (?, ?)",
+                )
+                .bind(user_id)
+                .bind(snapshot_no)
+                .execute(&mut **tx)
+                .await?;
+
+                // Load skill IDs
+                if let Some(skill_ids) = snapshot_entry.get("skillIds").and_then(|v| v.as_array()) {
+                    for skill_id in skill_ids {
+                        if let Some(id) = skill_id.as_i64() {
+                            sqlx::query(
+                                r#"
+                                INSERT INTO user_weekwalk_v2_snapshot_skills (
+                                    user_id, snapshot_no, skill_id
+                                ) VALUES (?, ?, ?)
+                                "#,
+                            )
+                            .bind(user_id)
+                            .bind(snapshot_no)
+                            .bind(id as i32)
+                            .execute(&mut **tx)
+                            .await?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::info!("Loaded weekwalk v2 info for user {}", user_id);
+    Ok(())
+}
+
+/// Load explore simple info from explore_simple_info.json
+pub async fn load_explore_simple_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/explore/explore_simple_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_explore_simple_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    // Insert main info
+    sqlx::query(
+        "INSERT INTO user_explore_info (user_id, last_map_id, is_show_bag) VALUES (?, ?, ?)",
+    )
+    .bind(user_id)
+    .bind(data.get("lastMapId").and_then(|v| v.as_i64()).unwrap_or(0))
+    .bind(
+        data.get("isShowBag")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Load chapter simple
+    if let Some(chapters) = data.get("chapterSimple").and_then(|v| v.as_array()) {
+        for chapter_entry in chapters {
+            let chapter_id = chapter_entry
+                .get("chapterId")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+
+            sqlx::query(
+                "INSERT INTO user_explore_chapters (user_id, chapter_id, is_finish) VALUES (?, ?, ?)"
+            )
+            .bind(user_id)
+            .bind(chapter_id)
+            .bind(chapter_entry.get("isFinish").and_then(|v| v.as_bool()).unwrap_or(false))
+            .execute(&mut **tx)
+            .await?;
+
+            // Load archive IDs
+            if let Some(archives) = chapter_entry.get("archiveIds").and_then(|v| v.as_array()) {
+                for archive_id in archives {
+                    if let Some(id) = archive_id.as_i64() {
+                        sqlx::query(
+                            "INSERT INTO user_explore_chapter_archives (user_id, chapter_id, archive_id) VALUES (?, ?, ?)"
+                        )
+                        .bind(user_id)
+                        .bind(chapter_id)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+
+            // Load bonus scenes
+            if let Some(bonus_scenes) = chapter_entry.get("bonusScene").and_then(|v| v.as_array()) {
+                for bonus_entry in bonus_scenes {
+                    let bonus_scene_id = bonus_entry
+                        .get("bonusSceneId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32;
+
+                    sqlx::query(
+                        "INSERT INTO user_explore_bonus_scenes (user_id, chapter_id, bonus_scene_id) VALUES (?, ?, ?)"
+                    )
+                    .bind(user_id)
+                    .bind(chapter_id)
+                    .bind(bonus_scene_id)
+                    .execute(&mut **tx)
+                    .await?;
+
+                    // Load options
+                    if let Some(options) = bonus_entry.get("options").and_then(|v| v.as_array()) {
+                        for option in options {
+                            if let Some(opt_id) = option.as_i64() {
+                                sqlx::query(
+                                    "INSERT INTO user_explore_bonus_scene_options (user_id, chapter_id, bonus_scene_id, option_id) VALUES (?, ?, ?, ?)"
+                                )
+                                .bind(user_id)
+                                .bind(chapter_id)
+                                .bind(bonus_scene_id)
+                                .bind(opt_id as i32)
+                                .execute(&mut **tx)
+                                .await?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Load map simple
+    if let Some(maps) = data.get("mapSimple").and_then(|v| v.as_array()) {
+        for map_entry in maps {
+            let map_id = map_entry.get("mapId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+            sqlx::query(
+                r#"
+                INSERT INTO user_explore_maps (
+                    user_id, map_id,
+                    bonus_num, gold_coin, purple_coin,
+                    bonus_num_total, gold_coin_total, purple_coin_total
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, map_id) DO UPDATE SET
+                    bonus_num_total   = excluded.bonus_num_total,
+                    gold_coin_total   = excluded.gold_coin_total,
+                    purple_coin_total = excluded.purple_coin_total
+                "#,
+            )
+            .bind(user_id)
+            .bind(map_id)
+            .bind(
+                map_entry
+                    .get("bonusNum")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                map_entry
+                    .get("goldCoin")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                map_entry
+                    .get("purpleCoin")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                map_entry
+                    .get("bonusNumTotal")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                map_entry
+                    .get("goldCoinTotal")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                map_entry
+                    .get("purpleCoinTotal")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            // Load bonus IDs
+            if let Some(bonus_ids) = map_entry.get("bonusIds").and_then(|v| v.as_array()) {
+                for bonus_id in bonus_ids {
+                    if let Some(id) = bonus_id.as_i64() {
+                        sqlx::query(
+                            "INSERT INTO user_explore_map_bonuses (user_id, map_id, bonus_id) VALUES (?, ?, ?)"
+                        )
+                        .bind(user_id)
+                        .bind(map_id)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Load unlocked map IDs
+    if let Some(unlock_maps) = data.get("unlockMapIds").and_then(|v| v.as_array()) {
+        for map_id in unlock_maps {
+            if let Some(id) = map_id.as_i64() {
+                sqlx::query(
+                    r#"
+                    INSERT OR IGNORE INTO user_explore_unlocked_maps (user_id, map_id)
+                    VALUES (?, ?)
+                    "#,
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    tracing::info!("Loaded explore simple info for user {}", user_id);
+    Ok(())
+}
+
+/// Load tower info from tower_info.json
+pub async fn load_tower_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/tower/tower_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_tower_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    // Insert main info
+    sqlx::query(
+        "INSERT INTO user_tower_info (user_id, mop_up_times, trial_hero_season) VALUES (?, ?, ?)",
+    )
+    .bind(user_id)
+    .bind(data.get("mopUpTimes").and_then(|v| v.as_i64()).unwrap_or(0))
+    .bind(
+        data.get("trialHeroSeason")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Load tower opens
+    if let Some(tower_opens) = data.get("towerOpens").and_then(|v| v.as_array()) {
+        for open_entry in tower_opens {
+            sqlx::query(
+                r#"
+                INSERT INTO user_tower_opens (
+                    user_id, tower_type, tower_id, status, round, next_time, tower_start_time, task_end_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                "#
+            )
+            .bind(user_id)
+            .bind(open_entry.get("type").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(open_entry.get("towerId").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(open_entry.get("status").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(open_entry.get("round").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(open_entry.get("nextTime").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(open_entry.get("towerStartTime").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(open_entry.get("taskEndTime").and_then(|v| v.as_i64()).unwrap_or(0))
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load towers
+    if let Some(towers) = data.get("towers").and_then(|v| v.as_array()) {
+        for tower_entry in towers {
+            let tower_type = tower_entry
+                .get("type")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            let tower_id = tower_entry
+                .get("towerId")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+
+            // Insert tower
+            sqlx::query(
+                r#"
+                INSERT INTO user_towers (
+                    user_id, tower_type, tower_id, pass_layer_id, history_high_score, params
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(tower_type)
+            .bind(tower_id)
+            .bind(
+                tower_entry
+                    .get("passLayerId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                tower_entry
+                    .get("historyHighScore")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                tower_entry
+                    .get("params")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(""),
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            // Load open special layer IDs
+            if let Some(sp_layers) = tower_entry.get("openSpLayerIds").and_then(|v| v.as_array()) {
+                for sp_layer_id in sp_layers {
+                    if let Some(id) = sp_layer_id.as_i64() {
+                        sqlx::query(
+                            "INSERT INTO user_tower_open_sp_layers (user_id, tower_type, tower_id, sp_layer_id) VALUES (?, ?, ?, ?)"
+                        )
+                        .bind(user_id)
+                        .bind(tower_type)
+                        .bind(tower_id)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+
+            // Load pass teach IDs
+            if let Some(teach_ids) = tower_entry.get("passTeachIds").and_then(|v| v.as_array()) {
+                for teach_id in teach_ids {
+                    if let Some(id) = teach_id.as_i64() {
+                        sqlx::query(
+                            "INSERT INTO user_tower_pass_teaches (user_id, tower_type, tower_id, teach_id) VALUES (?, ?, ?, ?)"
+                        )
+                        .bind(user_id)
+                        .bind(tower_type)
+                        .bind(tower_id)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+
+            // Load layers
+            if let Some(layers) = tower_entry.get("layerNOs").and_then(|v| v.as_array()) {
+                for layer_entry in layers {
+                    let layer_id = layer_entry
+                        .get("layerId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32;
+
+                    // Insert layer
+                    sqlx::query(
+                        r#"
+                        INSERT INTO user_tower_layers (
+                            user_id, tower_type, tower_id, layer_id, curr_high_score, history_high_score
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        "#
+                    )
+                    .bind(user_id)
+                    .bind(tower_type)
+                    .bind(tower_id)
+                    .bind(layer_id)
+                    .bind(layer_entry.get("currHighScore").and_then(|v| v.as_i64()).unwrap_or(0))
+                    .bind(layer_entry.get("historyHighScore").and_then(|v| v.as_i64()).unwrap_or(0))
+                    .execute(&mut **tx)
+                    .await?;
+
+                    // Load episodes
+                    if let Some(episodes) = layer_entry.get("episodeNOs").and_then(|v| v.as_array())
+                    {
+                        for episode_entry in episodes {
+                            let episode_id = episode_entry
+                                .get("episodeId")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0) as i32;
+
+                            // Insert episode
+                            sqlx::query(
+                                r#"
+                                INSERT INTO user_tower_episodes (
+                                    user_id, tower_type, tower_id, layer_id, episode_id, status, assist_boss_id
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                "#
+                            )
+                            .bind(user_id)
+                            .bind(tower_type)
+                            .bind(tower_id)
+                            .bind(layer_id)
+                            .bind(episode_id)
+                            .bind(episode_entry.get("status").and_then(|v| v.as_i64()).unwrap_or(0))
+                            .bind(episode_entry.get("assistBossId").and_then(|v| v.as_i64()).unwrap_or(0))
+                            .execute(&mut **tx)
+                            .await?;
+
+                            // Load heroes
+                            if let Some(heroes) =
+                                episode_entry.get("heros").and_then(|v| v.as_array())
+                            {
+                                for hero_entry in heroes {
+                                    let hero_id = hero_entry
+                                        .get("heroId")
+                                        .and_then(|v| v.as_i64())
+                                        .unwrap_or(0)
+                                        as i32;
+
+                                    // Insert hero
+                                    sqlx::query(
+                                        r#"
+                                        INSERT INTO user_tower_episode_heroes (
+                                            user_id, tower_type, tower_id, layer_id, episode_id, hero_id, trial_id
+                                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        "#
+                                    )
+                                    .bind(user_id)
+                                    .bind(tower_type)
+                                    .bind(tower_id)
+                                    .bind(layer_id)
+                                    .bind(episode_id)
+                                    .bind(hero_id)
+                                    .bind(hero_entry.get("trialId").and_then(|v| v.as_i64()).unwrap_or(0))
+                                    .execute(&mut **tx)
+                                    .await?;
+
+                                    // FETCH default_equip_uid FROM heroes TABLE
+                                    let default_equip_uid: Option<i64> = sqlx::query_scalar(
+                                        "SELECT default_equip_uid FROM heroes WHERE user_id = ? AND hero_id = ?"
+                                    )
+                                    .bind(user_id)
+                                    .bind(hero_id)
+                                    .fetch_optional(&mut **tx)
+                                    .await?;
+
+                                    // If hero has a default equip, store it
+                                    if let Some(equip_uid) = default_equip_uid {
+                                        if equip_uid > 0 {
+                                            // Only if actually equipped
+                                            sqlx::query(
+                                                r#"
+                                                INSERT INTO user_tower_episode_hero_equips (
+                                                    user_id, tower_type, tower_id, layer_id, episode_id, hero_id, equip_uid
+                                                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                                "#
+                                            )
+                                            .bind(user_id)
+                                            .bind(tower_type)
+                                            .bind(tower_id)
+                                            .bind(layer_id)
+                                            .bind(episode_id)
+                                            .bind(hero_id)
+                                            .bind(equip_uid)
+                                            .execute(&mut **tx)
+                                            .await?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Load assist bosses (unchanged)
+    if let Some(bosses) = data.get("assistBosses").and_then(|v| v.as_array()) {
+        for boss_entry in bosses {
+            let boss_id = boss_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+            sqlx::query(
+                r#"
+                INSERT INTO user_assist_bosses (user_id, boss_id, level, use_talent_plan)
+                VALUES (?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(boss_id)
+            .bind(
+                boss_entry
+                    .get("level")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1),
+            )
+            .bind(
+                boss_entry
+                    .get("useTalentPlan")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            if let Some(plans) = boss_entry.get("talentPlans").and_then(|v| v.as_array()) {
+                for plan_entry in plans {
+                    let plan_id = plan_entry
+                        .get("planId")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32;
+
+                    sqlx::query(
+                        r#"
+                        INSERT INTO user_assist_boss_talent_plans (
+                            user_id, boss_id, plan_id, talent_point, plan_name
+                        ) VALUES (?, ?, ?, ?, ?)
+                        "#,
+                    )
+                    .bind(user_id)
+                    .bind(boss_id)
+                    .bind(plan_id)
+                    .bind(
+                        plan_entry
+                            .get("talentPoint")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0),
+                    )
+                    .bind(
+                        plan_entry
+                            .get("planName")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(""),
+                    )
+                    .execute(&mut **tx)
+                    .await?;
+
+                    if let Some(talents) = plan_entry.get("talentIds").and_then(|v| v.as_array()) {
+                        for talent_id in talents {
+                            if let Some(id) = talent_id.as_i64() {
+                                sqlx::query(
+                                    r#"
+                                    INSERT INTO user_assist_boss_plan_talents (
+                                        user_id, boss_id, plan_id, talent_id
+                                    ) VALUES (?, ?, ?, ?)
+                                    "#,
+                                )
+                                .bind(user_id)
+                                .bind(boss_id)
+                                .bind(plan_id)
+                                .bind(id as i32)
+                                .execute(&mut **tx)
+                                .await?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::info!("Loaded tower info for user {}", user_id);
+    Ok(())
+}
+
+/// Load player card info from player_card_info.json
+pub async fn load_player_card_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/player_card/player_card_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_player_card_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    if let Some(card_info) = data.get("playerCardInfo").and_then(|v| v.as_object()) {
+        // Convert showSettings array to JSON string
+        let show_settings = card_info
+            .get("showSettings")
+            .and_then(|v| serde_json::to_string(v).ok())
+            .unwrap_or_else(|| "[]".to_string());
+
+        sqlx::query(
+            r#"
+            INSERT INTO user_player_card_info (
+                user_id, show_settings, progress_setting, base_setting, hero_cover, theme_id,
+                show_achievement, critter, room_collection, weekwalk_deep_layer_id, explore_collection,
+                rouge_difficulty, act128_sss_count, achievement_count, assist_times, hero_cover_times,
+                max_faith_hero_count, total_cost_power, skin_count, tower_layer, tower_boss_pass_count,
+                hero_max_level_count, weekwalk_ver2_platinum_cup, hero_count, tower_layer_metre
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#
+        )
+        .bind(user_id)
+        .bind(show_settings)
+        .bind(card_info.get("progressSetting").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("baseSetting").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("heroCover").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("themeId").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("showAchievement").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("critter").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("roomCollection").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("weekwalkDeepLayerId").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("exploreCollection").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(card_info.get("rougeDifficulty").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("act128SSSCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("achievementCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("assistTimes").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("heroCoverTimes").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("maxFaithHeroCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("totalCostPower").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("skinCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("towerLayer").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("towerBossPassCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("heroMaxLevelCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("weekwalkVer2PlatinumCup").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("heroCount").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(card_info.get("towerLayerMetre").and_then(|v| v.as_i64()).unwrap_or(0))
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    tracing::info!("Loaded player card info for user {}", user_id);
+    Ok(())
+}
+
+/// Load command post info from command_post_info.json
+pub async fn load_command_post_info(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/command/command_post_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_command_post_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    // Insert main info
+    sqlx::query("INSERT INTO user_command_post_info (user_id, paper, catch_num) VALUES (?, ?, ?)")
+        .bind(user_id)
+        .bind(data.get("paper").and_then(|v| v.as_i64()).unwrap_or(0))
+        .bind(data.get("catchNum").and_then(|v| v.as_i64()).unwrap_or(0))
+        .execute(&mut **tx)
+        .await?;
+
+    // Load events
+    if let Some(events) = data.get("eventList").and_then(|v| v.as_array()) {
+        for event_entry in events {
+            let event_id = event_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+            sqlx::query(
+                r#"
+                INSERT INTO user_command_post_events (
+                    user_id, event_id, state, start_time, end_time, is_read
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(event_id)
+            .bind(
+                event_entry
+                    .get("state")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                event_entry
+                    .get("startTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                event_entry
+                    .get("endTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                event_entry
+                    .get("read")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            // Load hero IDs
+            if let Some(hero_ids) = event_entry.get("heroIds").and_then(|v| v.as_array()) {
+                for hero_id in hero_ids {
+                    if let Some(id) = hero_id.as_i64() {
+                        sqlx::query(
+                            "INSERT INTO user_command_post_event_heroes (user_id, event_id, hero_id) VALUES (?, ?, ?)"
+                        )
+                        .bind(user_id)
+                        .bind(event_id)
+                        .bind(id as i32)
+                        .execute(&mut **tx)
+                        .await?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Load tasks
+    if let Some(tasks) = data.get("tasks").and_then(|v| v.as_array()) {
+        for task_entry in tasks {
+            sqlx::query(
+                r#"
+                INSERT INTO user_command_post_tasks (
+                    user_id, task_id, progress, has_finished, finish_count, task_type, expiry_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(task_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(
+                task_entry
+                    .get("progress")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                task_entry
+                    .get("hasFinished")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            )
+            .bind(
+                task_entry
+                    .get("finishCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(task_entry.get("type").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(
+                task_entry
+                    .get("expiryTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load catch tasks
+    if let Some(catch_tasks) = data.get("catchTasks").and_then(|v| v.as_array()) {
+        for task_entry in catch_tasks {
+            sqlx::query(
+                r#"
+                INSERT INTO user_command_post_catch_tasks (
+                    user_id, task_id, progress, has_finished, finish_count, task_type, expiry_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(user_id)
+            .bind(task_entry.get("id").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(
+                task_entry
+                    .get("progress")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(
+                task_entry
+                    .get("hasFinished")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            )
+            .bind(
+                task_entry
+                    .get("finishCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .bind(task_entry.get("type").and_then(|v| v.as_i64()).unwrap_or(0))
+            .bind(
+                task_entry
+                    .get("expiryTime")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load gain bonuses
+    if let Some(bonuses) = data.get("gainBonus").and_then(|v| v.as_array()) {
+        for bonus_id in bonuses {
+            if let Some(id) = bonus_id.as_i64() {
+                sqlx::query(
+                    "INSERT INTO user_command_post_gain_bonus (user_id, bonus_id) VALUES (?, ?)",
+                )
+                .bind(user_id)
+                .bind(id as i32)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    tracing::info!("Loaded command post info for user {}", user_id);
+    Ok(())
+}
+
+/// Load friend info from friend_info.json
+pub async fn load_friend_info(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/friend/friend_info.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_friend_info: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    let now = common::time::ServerTime::now_ms();
+
+    // Load friend IDs
+    if let Some(friend_ids) = data.get("friendIds").and_then(|v| v.as_array()) {
+        for friend_id in friend_ids {
+            if let Some(id) = friend_id.as_u64() {
+                sqlx::query(
+                    "INSERT INTO user_friends (user_id, friend_id, created_at) VALUES (?, ?, ?)",
+                )
+                .bind(user_id)
+                .bind(id as i64)
+                .bind(now)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    // Load blacklist IDs
+    if let Some(blacklist_ids) = data.get("blackListIds").and_then(|v| v.as_array()) {
+        for blocked_id in blacklist_ids {
+            if let Some(id) = blocked_id.as_u64() {
+                sqlx::query(
+                    "INSERT INTO user_blacklist (user_id, blocked_user_id, created_at) VALUES (?, ?, ?)"
+                )
+                .bind(user_id)
+                .bind(id as i64)
+                .bind(now)
+                .execute(&mut **tx)
+                .await?;
+            }
+        }
+    }
+
+    tracing::info!("Loaded friend info for user {}", user_id);
+    Ok(())
+}
+
+/// Load simple properties from simple_property.json
+pub async fn load_simple_properties(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/starter/property/simple_property.json");
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("load_simple_properties: failed to parse JSON: {e}");
+            return Ok(());
+        }
+    };
+
+    if let Some(properties) = data.get("simpleProperties").and_then(|v| v.as_array()) {
+        for prop in properties {
+            let property_id = prop.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let property_value = prop
+                .get("property")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            sqlx::query(
+                "INSERT INTO user_simple_properties (user_id, property_id, property_value) VALUES (?, ?, ?)"
+            )
+            .bind(user_id)
+            .bind(property_id)
+            .bind(property_value)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    tracing::info!("Loaded simple properties for user {}", user_id);
+    Ok(())
+}
+
+/// Load activity 101 info for activity 13108
+pub async fn load_activity101_13108(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/static/activity101/activity101_infos_13108.json");
+    load_activity101_from_json(tx, user_id, 13108, json_str).await
+}
+
+/// Load activity 101 info for activity 12722
+pub async fn load_activity101_12722(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+) -> sqlx::Result<()> {
+    let json_str = include_str!("../../../assets/static/activity101/activity101_infos_12722.json");
+    load_activity101_from_json(tx, user_id, 12722, json_str).await
+}
+
+/// Helper to load activity 101 info from JSON string
+async fn load_activity101_from_json(
+    tx: &mut Transaction<'_, Sqlite>,
+    user_id: i64,
+    activity_id: i32,
+    json_str: &str,
+) -> sqlx::Result<()> {
+    let now = common::time::ServerTime::now_ms();
+
+    let data: Value = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "load_activity101: failed to parse activity {}: {}",
+                activity_id, e
+            );
+            return Ok(());
+        }
+    };
+
+    if let Some(infos) = data.get("infos").and_then(|v| v.as_array()) {
+        for info in infos {
+            let day_id = info.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+            sqlx::query(
+                r#"
+                INSERT OR IGNORE INTO user_activity101_claims
+                    (user_id, activity_id, day_id, claimed_at)
+                VALUES (?, ?, ?, NULL)
+                "#,
+            )
+            .bind(user_id)
+            .bind(activity_id)
+            .bind(day_id)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    // Load once bonus status
+    let got_once_bonus = data
+        .get("gotOnceBonus")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if got_once_bonus {
+        sqlx::query(
+            "INSERT INTO user_activity101_once_bonus (user_id, activity_id, claimed_at)
+             VALUES (?, ?, ?)",
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    tracing::info!("Loaded activity 101 ({}) for user {}", activity_id, user_id);
+    Ok(())
+}
+
+pub async fn load_starter_bgm(tx: &mut Transaction<'_, Sqlite>, user_id: i64) -> sqlx::Result<()> {
+    let now = common::time::ServerTime::now_ms();
+    let tables = codegen::configs::get();
+
+    let bgms: Vec<_> = tables.bgm_switch.iter().collect();
+
+    const DEFAULT_BGM_ID: i32 = 2204;
+
+    for bgm in bgms {
+        let is_default = bgm.id == DEFAULT_BGM_ID;
+        sqlx::query(
+            "INSERT INTO user_bgm (player_id, bgm_id, unlock_time, is_favorite, is_read)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(user_id)
+        .bind(bgm.id)
+        .bind(now)
+        .bind(is_default)
+        .bind(true)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    sqlx::query(
+        "INSERT INTO user_bgm_state (player_id, use_bgm_id)
+         VALUES (?, ?)",
+    )
+    .bind(user_id)
+    .bind(DEFAULT_BGM_ID)
+    .execute(&mut **tx)
+    .await?;
+
+    tracing::info!("Loaded starter bgm for user {}", user_id);
+
+    Ok(())
+}
+
+/// Load starter mail for new user
+pub async fn load_starter_mail(tx: &mut Transaction<'_, Sqlite>, uid: i64) -> sqlx::Result<()> {
+    let now = common::time::ServerTime::now_ms();
+    let base_incr_id = 80000000i64 + (uid * 1000);
+
+    sqlx::query(
+        "INSERT INTO user_mails (
+            incr_id, user_id, mail_id, params, attachment, state, create_time,
+            sender, title, content, copy, expire_time, sender_type,
+            jump_title, jump
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(base_incr_id)           // 1
+    .bind(uid)                     // 2
+    .bind(0)                       // 3 - mail_id
+    .bind("")                      // 4 - params
+    .bind("2#5#3000000|2#3#3000000|1#110101#10|1#110201#10|2#2#1800|4#3125#1") // 5 - attachment Dust | Sharp |
+    .bind(0)                       // 6 - state
+    .bind(now)                     // 7 - create_time
+    .bind(r#"{"en":"System","zh":"系统的回响","jp":"システム"}"#) // 8 - sender
+    .bind(r#"{"en":"Welcome Gift","zh":"新手礼包","jp":"ウェルカムギフト"}"#) // 9 - title
+    .bind(r#"{"en":"Welcome to sonetto-rs! Here are some resources to help you get started. Remember, this project is free - if you paid, you got scammed, sorry.","zh":"欢迎来到 sonetto-rs！这里有一些资源帮助你开始。记住，这个项目是免费的 - 如果你付了钱，你被骗了，抱歉。","jp":"sonetto-rs へようこそ！始めるためのリソースです。このプロジェクトは無料です - もしお金を払ったなら、詐欺に遭いました、すみません。"}"#) // 10 - content
+    .bind("")                      // 11 - copy
+    .bind(0)                       // 12 - expire_time
+    .bind(2)                       // 13 - sender_type
+    .bind("")                      // 14 - jump_title
+    .bind("")                      // 15 - jump
+    .execute(&mut **tx)
+    .await?;
+
+    // Log to history
+    sqlx::query(
+        "INSERT INTO user_mail_history (
+            user_id, mail_incr_id, mail_id, attachment, action, action_time, state_at_action
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(uid)
+    .bind(base_incr_id)
+    .bind(0)
+    .bind("2#5#3000000|2#3#3000000|1#110101#10|1#110201#10|2#2#1800|4#3125#1")
+    .bind("created")
+    .bind(now)
+    .bind(0)
+    .execute(&mut **tx)
+    .await?;
+
+    tracing::info!("Created welcome mail {} for new user {}", base_incr_id, uid);
     Ok(())
 }
 
 pub async fn load_all_starter_data(pool: &SqlitePool, uid: i64) -> sqlx::Result<()> {
-    tracing::info!(
-        "Loading reduced starter data for uid {uid} (more than minimal to avoid crashes)"
-    );
+    tracing::info!("Loading all starter data for uid {uid} in a single transaction");
+
     let mut tx = pool.begin().await?;
 
-    load_player_info(&mut tx, uid).await?;
-    load_starter_user_stats(&mut tx, uid).await?;
     load_critter_info(&mut tx, uid).await?;
+    load_player_info(&mut tx, uid).await?;
     let equip_map = load_equipment(&mut tx, uid).await?;
+    // Then load heroes with equipment references
     load_hero_list(&mut tx, uid, &equip_map).await?;
     load_starter_items(&mut tx, uid).await?;
-
-    // Add a few more common essentials to prevent early crashes
-    // Basic guides (mark as completed)
-    sqlx::query("INSERT INTO guide_progress (user_id, guide_id, step_id) VALUES (?, 1, -1)")
-        .bind(uid)
-        .execute(&mut *tx)
-        .await?;
-
-    // Basic summon stats
-    sqlx::query(
-        "INSERT INTO user_summon_stats (user_id, free_equip_summon, is_show_new_summon, new_summon_count, total_summon_count)
-         VALUES (?, false, false, 0, 0)"
-    )
-    .bind(uid)
-    .execute(&mut *tx)
-    .await?;
+    load_starter_currencies(&mut tx, uid).await?;
+    load_starter_guides(&mut tx, uid).await?;
+    load_starter_user_stats(&mut tx, uid).await?;
+    load_starter_hero_groups(&mut tx, uid).await?;
+    load_hero_group_snapshots(&mut tx, uid).await?;
+    load_dungeon_info(&mut tx, uid).await?;
+    load_dungeon_infos(&mut tx, uid).await?;
+    load_story_data(&mut tx, uid).await?;
+    load_charge_info(&mut tx, uid).await?;
+    load_block_package_info(&mut tx, uid).await?;
+    load_building_info(&mut tx, uid).await?;
+    load_character_interaction_info(&mut tx, uid).await?;
+    load_summon_info(&mut tx, uid).await?;
+    load_summon_history(&mut tx, uid).await?;
+    load_achievement_info(&mut tx, uid).await?;
+    load_dialog_info(&mut tx, uid).await?;
+    load_starter_antiques(&mut tx, uid).await?;
+    load_weekwalk_info(&mut tx, uid).await?;
+    load_weekwalk_v2_info(&mut tx, uid).await?;
+    load_explore_simple_info(&mut tx, uid).await?;
+    load_tower_info(&mut tx, uid).await?;
+    load_player_card_info(&mut tx, uid).await?;
+    load_command_post_info(&mut tx, uid).await?;
+    load_friend_info(&mut tx, uid).await?;
+    load_simple_properties(&mut tx, uid).await?;
+    load_activity101_13108(&mut tx, uid).await?;
+    load_activity101_12722(&mut tx, uid).await?;
+    load_starter_bgm(&mut tx, uid).await?;
+    load_room_info(&mut tx, uid).await?;
+    load_starter_mail(&mut tx, uid).await?;
 
     tx.commit().await?;
-    tracing::info!("Finished loading reduced starter data for uid {uid}");
+
+    tracing::info!("Finished loading all starter data for uid {uid}");
     Ok(())
 }

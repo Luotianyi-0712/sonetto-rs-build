@@ -126,7 +126,7 @@ pub async fn add_equipment(
     count: i32,
 ) -> Result<Vec<i64>> {
     let now = common::time::ServerTime::now_ms();
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let equip = game_data
         .equip
         .get(equip_id)

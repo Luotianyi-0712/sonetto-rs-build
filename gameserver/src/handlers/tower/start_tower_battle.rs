@@ -4,7 +4,7 @@ use crate::state::{
     ActiveBattle, BattleContext, ConnectionContext, create_battle, default_max_ap,
     generate_initial_deck,
 };
-use data::exceldb;
+use codegen::configs;
 use prost::Message;
 use sonettobuf::{
     CmdId, DungeonUpdatePush, StartDungeonReply, StartTowerBattleReply, StartTowerBattleRequest,
@@ -60,7 +60,7 @@ pub async fn on_start_tower_battle(
 
     let hero_count = fight_group.hero_list.iter().filter(|&&u| u != 0).count();
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let battle_id = game_data
         .episode
         .iter()

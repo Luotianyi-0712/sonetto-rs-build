@@ -47,7 +47,7 @@ pub fn process_item_use(
         let target_id_val = target_id.unwrap();
         (vec![(target_id_val as u32, quantity)], vec![])
     } else {
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let item_cfg = game_data.item.get(material_id as i32);
 
         if let Some(cfg) = item_cfg {
@@ -114,7 +114,7 @@ pub async fn apply_insight_item(
         return Ok(item_id);
     }
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let insight_data = game_data
         .insight_item
         .iter()
@@ -164,7 +164,7 @@ async fn unlock_insight_skin(
     hero_id: i32,
     hero_uid: i64,
 ) -> Result<(), AppError> {
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let Some(skin) = game_data
         .skin
         .iter()
@@ -285,7 +285,7 @@ pub async fn can_claim_month_card(
         day_of_month
     );
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let mut reward_str = String::new();
 
     for (card_id, _) in &active_cards {

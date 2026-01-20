@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use data::exceldb;
+use codegen::configs;
 use database::models::game::heros::{HeroModel, UserHeroModel};
 use once_cell::sync::Lazy;
 use rand::thread_rng;
@@ -96,7 +96,7 @@ pub async fn generate_ai_initial_deck(fight: &Fight, seed: u64) -> Vec<CardInfo>
 
         let target_uid = players[rng.gen_range(0..players.len())];
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let skill_effect_id = game_data
             .skill
             .iter()
@@ -151,7 +151,7 @@ fn compute_max_cards(hero_count: usize) -> usize {
 }
 
 static TRIAL_UID_MAP: Lazy<HashMap<i64, i32>> = Lazy::new(|| {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let mut map = HashMap::new();
 
     let trial_heroes: Vec<_> = game_data.hero_trial.iter().collect();
@@ -171,7 +171,7 @@ async fn build_candidate_pool(
     hero_uids: &[i64],
 ) -> Result<Vec<CardInfo>, AppError> {
     let mut pool_cards = Vec::new();
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let hero = UserHeroModel::new(user_id, pool.clone());
 
@@ -254,7 +254,7 @@ fn draw_cards_with_merge(candidates: Vec<CardInfo>, max_cards: usize) -> Vec<Car
             {
                 let new_rank = last.card_type.unwrap_or(1) + 1;
 
-                let game_data = exceldb::get();
+                let game_data = configs::get();
                 if let Some(upgraded_skill) = game_data.skill.iter().find(|s| {
                     s.hero_id == last.hero_id.unwrap_or(0)
                         && s.skill_rank == new_rank
@@ -282,7 +282,7 @@ fn draw_cards_with_merge(candidates: Vec<CardInfo>, max_cards: usize) -> Vec<Car
 }
 
 fn get_hero_skills(hero_id: i32) -> Vec<i32> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let character = game_data.character.iter().find(|c| c.id == hero_id);
 
@@ -325,7 +325,7 @@ fn get_hero_skills(hero_id: i32) -> Vec<i32> {
 }
 
 pub fn default_max_ap(episode_id: i32, hero_count: usize) -> i32 {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let battle_id = game_data
         .episode

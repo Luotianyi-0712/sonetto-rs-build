@@ -1,32 +1,31 @@
-use crate::error::AppError;
-use crate::network::packet::ClientPacket;
-use crate::state::{
-    BannerType, ConnectionContext, GachaResult, GachaState, build_gacha, grant_dupe_rewards,
-    load_gacha_state, save_gacha_state,
+use crate::{
+    error::AppError,
+    network::packet::ClientPacket,
+    state::{
+        BannerType, ConnectionContext, GachaResult, GachaState, build_gacha, grant_dupe_rewards,
+        load_gacha_state, save_gacha_state,
+    },
+    util::{push, push::send_red_dot_push},
 };
-use crate::util::push;
-use data::exceldb;
-use database::db::game::summon::{add_summon_history, get_sp_pool_info};
-use std::sync::Arc;
-
-use database::models::game::currencies::UserCurrencyModel;
-use database::models::game::heros::UserHeroModel;
-use database::models::game::items::UserItemModel;
+use codegen::configs;
+use database::{
+    db::{
+        game::summon::{
+            add_summon_history, get_sp_pool_info, get_summon_pool_infos, get_summon_stats,
+            update_sp_pool_up_heroes,
+        },
+        user::account::get_user_token,
+    },
+    models::game::{currencies::UserCurrencyModel, heros::UserHeroModel, items::UserItemModel},
+};
 use prost::Message;
 use rand::thread_rng;
-use tokio::sync::Mutex;
-
-use crate::util::push::send_red_dot_push;
-
-use database::db::{
-    game::summon::{get_summon_pool_infos, get_summon_stats, *},
-    user::account::get_user_token,
-};
-
 use sonettobuf::{
     ChooseEnhancedPoolHeroReply, ChooseEnhancedPoolHeroRequest, CmdId, EndActivityPush,
     GetSummonInfoReply, SummonQueryTokenReply, SummonReply, SummonRequest, SummonResult,
 };
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub async fn on_get_summon_info(
     ctx: Arc<Mutex<ConnectionContext>>,
@@ -142,7 +141,7 @@ pub async fn on_summon(
     let item = UserItemModel::new(user_id, db.clone());
     let currency = UserCurrencyModel::new(user_id, db.clone());
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let summon_pool = game_data
         .summon_pool
         .iter()
@@ -263,7 +262,7 @@ pub async fn on_summon(
         }
     }
 
-    let pool_cfg = exceldb::get()
+    let pool_cfg = configs::get()
         .summon_pool
         .iter()
         .find(|p| p.id == pool_id)

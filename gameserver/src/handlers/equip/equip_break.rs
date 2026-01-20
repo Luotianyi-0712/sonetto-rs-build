@@ -36,7 +36,7 @@ pub async fn on_equip_break(
 
     let mut target = equip.get_equip(target_uid).await?;
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let target_equip_data = game_data
         .equip
         .get(target.equip_id)

@@ -1,5 +1,5 @@
 use crate::state::gacha::parse_dupe_rewards;
-use data::exceldb;
+use codegen::configs;
 
 pub async fn grant_dupe_rewards(
     hero_id: i32,
@@ -9,7 +9,7 @@ pub async fn grant_dupe_rewards(
         return Ok((Vec::new(), Vec::new()));
     }
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let hero = game_data
         .character
         .get(hero_id)

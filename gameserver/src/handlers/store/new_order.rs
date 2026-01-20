@@ -50,7 +50,7 @@ pub async fn on_new_order(
         let player_id = conn.player_id.ok_or(AppError::NotLoggedIn)?;
         let pool = &conn.state.db;
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let charge_pack = game_data
             .store_charge_goods
             .iter()

@@ -1,4 +1,4 @@
-use data::exceldb;
+use codegen::configs;
 use database::{
     db::game::equipment::Equipment,
     models::game::{equipment::UserEquipmentModel, heros::HeroData},
@@ -21,7 +21,7 @@ pub async fn build_hero_entity(
 
     let equip_id = equip_data.as_ref().map(|equip| equip.equip_id);
 
-    let game = exceldb::get();
+    let game = configs::get();
     let hero_type = game
         .character
         .iter()
@@ -136,7 +136,7 @@ fn build_attr(r: &HeroData, equip: Option<&Equipment>) -> HeroAttribute {
     let technic = ((r.record.base_technic as f32) * 1.395604).round() as i32;
 
     if let Some(equip) = equip {
-        let game_data = exceldb::get();
+        let game_data = configs::get();
 
         if let Some(strengthen) = game_data
             .equip_strengthen
@@ -255,7 +255,7 @@ fn parse_ex_skill_string(s: &str, hero_type: i32) -> Vec<i32> {
 }
 
 fn lookup_base_skill_group(hero_id: i32, group: i32) -> Vec<i32> {
-    let game = exceldb::get();
+    let game = configs::get();
 
     let Some(c) = game.character.iter().find(|c| c.id == hero_id) else {
         return vec![];
@@ -293,7 +293,7 @@ fn detect_ex_point_type(hero_id: i32) -> i32 {
 }
 
 fn lookup_ex_skill_group(hero_id: i32, group: i32, ex_level: i32) -> &'static str {
-    let game = exceldb::get();
+    let game = configs::get();
 
     for lvl in (1..=ex_level).rev() {
         if let Some(ex) = game
@@ -313,7 +313,7 @@ fn lookup_ex_skill_group(hero_id: i32, group: i32, ex_level: i32) -> &'static st
 }
 
 fn get_skill_from_character(hero_id: i32, group: i32) -> Vec<i32> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let Some(character) = game_data.character.iter().find(|c| c.id == hero_id) else {
         tracing::warn!("Character {} not found in character table", hero_id);
@@ -355,7 +355,7 @@ fn get_skill_from_character(hero_id: i32, group: i32) -> Vec<i32> {
 }
 
 fn get_destiny_exchange_map(facets_id: i32, level: i32) -> HashMap<i32, i32> {
-    let game = exceldb::get();
+    let game = configs::get();
 
     game.character_destiny_facets
         .iter()
@@ -387,7 +387,7 @@ fn apply_destiny_exchange(list: &mut [i32], map: &HashMap<i32, i32>) {
 }
 
 fn lookup_activity174_kit(hero_id: i32) -> Option<(Vec<i32>, Vec<i32>, Vec<i32>)> {
-    let game = exceldb::get();
+    let game = configs::get();
 
     let role = game
         .activity174_role
@@ -420,7 +420,7 @@ fn resolve_passives(
     equip_id: Option<i32>,
     destiny_exchange: Option<&HashMap<i32, i32>>,
 ) -> Vec<i32> {
-    let game = exceldb::get();
+    let game = configs::get();
     let hero_id = hero_data.record.hero_id;
     let ex_level = hero_data.record.ex_skill_level;
     let destiny_active = destiny_exchange.is_some();
@@ -527,7 +527,7 @@ fn resolve_passives(
 }
 
 fn get_hero_ex_skill(hero_data: &HeroData, destiny_exchange: Option<&HashMap<i32, i32>>) -> i32 {
-    let game = exceldb::get();
+    let game = configs::get();
     let hero_id = hero_data.record.hero_id;
     let ex_level = hero_data.record.ex_skill_level;
 
@@ -557,7 +557,7 @@ fn get_hero_ex_skill(hero_data: &HeroData, destiny_exchange: Option<&HashMap<i32
 }
 
 fn get_hero_career(hero_data: &HeroData) -> i32 {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let hero_id = hero_data.record.hero_id;
 
     game_data

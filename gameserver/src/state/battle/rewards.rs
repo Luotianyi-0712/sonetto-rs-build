@@ -1,4 +1,4 @@
-use data::exceldb;
+use codegen::configs;
 
 #[derive(Debug, Clone)]
 pub struct DungeonRewards {
@@ -13,7 +13,7 @@ pub fn generate_dungeon_rewards(
     is_first_clear: bool,
     multiplication: i32, // From StartDungeonRequest
 ) -> DungeonRewards {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let episode = game_data.episode.iter().find(|e| e.id == episode_id);
 
@@ -54,7 +54,7 @@ pub fn generate_dungeon_rewards(
 
 /// Parse bonus table entry and extract rewards
 fn parse_bonus_rewards(bonus_id: i32, multiplication: i32) -> Vec<(u32, u32, i32)> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     // Get bonus data
     let bonus = game_data.bonus.iter().find(|b| b.id == bonus_id);
 

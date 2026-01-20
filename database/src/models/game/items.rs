@@ -212,7 +212,7 @@ impl ItemModel<PowerItem> for UserItemModel {
     async fn create(&self, item_id: i32, amount: i32) -> Result<Vec<i32>, sqlx::Error> {
         let mut changed_item_ids = Vec::new();
         let now = common::time::ServerTime::now_ms();
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let power_item_config = game_data.power_item.iter().find(|p| p.id == item_id);
         let expire_time = if let Some(config) = power_item_config {
@@ -314,7 +314,7 @@ impl ItemModel<InsightItem> for UserItemModel {
 
     async fn create(&self, item_id: i32, amount: i32) -> Result<Vec<i32>, sqlx::Error> {
         let now = common::time::ServerTime::now_ms();
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let insight_config = game_data.insight_item.iter().find(|i| i.id == item_id);
         let expire_time = if let Some(config) = insight_config {
@@ -390,7 +390,7 @@ impl UserItemModel {
     pub async fn get_item(&self, item_id: u32) -> Result<Option<Item>, sqlx::Error> {
         ItemModel::<Item>::get(self, item_id as i64).await
     }
-    
+
     pub async fn get_all_items(&self) -> Result<Vec<Item>, sqlx::Error> {
         ItemModel::<Item>::get_all(self).await
     }
@@ -420,8 +420,11 @@ impl UserItemModel {
         }
         Ok(all_changed_ids)
     }
-    
-    pub async fn create_insight_items(&self, items: &[(i32, i32)]) -> Result<Vec<i32>, sqlx::Error> {
+
+    pub async fn create_insight_items(
+        &self,
+        items: &[(i32, i32)],
+    ) -> Result<Vec<i32>, sqlx::Error> {
         let mut all_changed_ids = Vec::new();
         for (item_id, amount) in items {
             let changed = ItemModel::<InsightItem>::create(self, *item_id, *amount).await?;

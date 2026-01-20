@@ -75,7 +75,7 @@ async fn cmd_item(ctx: CommandContext) -> Result<String, AppError> {
         Err(_) => return Ok(format!("Invalid amount: {}", ctx.args[1])),
     };
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     if game_data.item.get(item_id as i32).is_none() {
         return Ok(format!("Invalid item ID: {}", item_id));
     }
@@ -152,7 +152,7 @@ async fn cmd_hero(ctx: CommandContext) -> Result<String, AppError> {
         Err(_) => return Ok(format!("Invalid hero ID: {}", ctx.args[0])),
     };
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     if !game_data.character.iter().any(|c| c.id == hero_id) {
         return Ok(format!("Invalid hero ID: {}", hero_id));
     }
@@ -185,7 +185,7 @@ async fn cmd_equip(ctx: CommandContext) -> Result<String, AppError> {
         Err(_) => return Ok(format!("Invalid amount: {}", ctx.args[1])),
     };
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     if game_data.equip.get(equip_id).is_none() {
         return Ok(format!("Invalid equipment ID: {}", equip_id));
     }

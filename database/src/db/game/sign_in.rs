@@ -191,7 +191,7 @@ pub async fn reset_daily_counters(pool: &SqlitePool, user_id: i64) -> Result<()>
 
 /// Reset weekly counters (call this for any weekly-reset systems)
 pub async fn reset_weekly_counters(pool: &SqlitePool, user_id: i64) -> Result<()> {
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
 
     let weekly_store_goods: Vec<i32> = game_data
         .store_goods
@@ -259,7 +259,7 @@ pub async fn reset_weekly_counters(pool: &SqlitePool, user_id: i64) -> Result<()
 
 /// Reset monthly counters
 pub async fn reset_monthly_counters(pool: &SqlitePool, user_id: i64) -> Result<()> {
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
 
     sqlx::query(
         "UPDATE user_sign_in_info
@@ -479,7 +479,7 @@ pub async fn get_birthday_heroes_today(pool: &SqlitePool, user_id: i64) -> Resul
     let current_month = server_now.month();
     let current_day = server_now.day();
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::get();
 
     // Find all heroes whose birthday is today
     let mut birthday_hero_ids = Vec::new();

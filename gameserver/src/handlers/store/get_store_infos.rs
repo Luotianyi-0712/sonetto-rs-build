@@ -19,7 +19,7 @@ pub async fn on_get_store_infos(
         let player_id = conn.player_id.ok_or(AppError::NotLoggedIn)?;
         let pool = &conn.state.db;
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let mut store_infos = Vec::new();
 
         for store_id in &request.store_ids {

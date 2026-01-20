@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     run_migrations(&db).await?;
 
     info!("Loading game data...");
-    data::exceldb::init(excel_data_directory().to_str().unwrap())?;
+    codegen::configs::init(excel_data_directory().to_str().unwrap())?;
     info!("Game data loaded");
 
     let state = Arc::new(AppState::new(db));

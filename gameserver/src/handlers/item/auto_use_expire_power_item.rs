@@ -36,7 +36,7 @@ pub async fn on_auto_use_expire_power_item(
             tracing::info!("User {} has no expired power items", player_id);
             (player_id, false)
         } else {
-            let game_data = data::exceldb::get();
+            let game_data = codegen::configs::get();
             let mut total_stamina = 0;
 
             for (uid, item_id, quantity, expire_time) in &expired_items {

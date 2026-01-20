@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_migrations(&db).await?;
 
     info!("Loading game data...");
-    data::exceldb::init(excel_data_directory().to_str().unwrap())?;
+    codegen::configs::init(excel_data_directory().to_str().unwrap())?;
     info!("Game data loaded");
 
     let state = AppState {

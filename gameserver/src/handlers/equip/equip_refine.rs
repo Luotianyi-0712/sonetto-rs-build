@@ -33,7 +33,7 @@ pub async fn on_equip_refine(
 
     let mut target = equip.get_equip(target_uid).await?;
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
 
     let mut valid_consumed = 0;
     let mut equips_to_delete = Vec::new();

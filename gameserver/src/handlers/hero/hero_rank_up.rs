@@ -41,7 +41,7 @@ pub async fn on_hero_rank_up(
         let current_rank = hero_data.record.rank;
         let target_rank = current_rank + 1;
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let rank_data = game_data
             .character_rank

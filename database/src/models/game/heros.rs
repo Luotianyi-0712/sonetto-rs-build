@@ -1,5 +1,5 @@
 use anyhow::Result;
-use data::exceldb::character_level::CharacterLevel;
+use codegen::character_level::CharacterLevel;
 use serde::{Deserialize, Serialize};
 use sonettobuf;
 use sqlx::{FromRow, SqlitePool};
@@ -776,7 +776,7 @@ impl HeroModel<HeroData> for UserHeroModel {
     }
 
     async fn create_hero(&self, hero_id: i32) -> Result<i64> {
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let now = common::time::ServerTime::now_ms();
 
         let last_hero_uid: Option<i64> =
@@ -1013,7 +1013,7 @@ impl HeroModel<HeroData> for UserHeroModel {
             .await?;
         }
 
-        let character_voices: Vec<&data::exceldb::character_voice::CharacterVoice> = game_data
+        let character_voices: Vec<&codegen::character_voice::CharacterVoice> = game_data
             .character_voice
             .iter()
             .filter(|v| v.hero_id == hero_id)
@@ -1377,7 +1377,7 @@ impl HeroModel<HeroData> for UserHeroModel {
             return Ok(false);
         }
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let insight_skin = game_data
             .skin
             .iter()
@@ -1772,7 +1772,7 @@ impl HeroModel<HeroData> for UserHeroModel {
         template_id: i32,
     ) -> Result<sonettobuf::TalentTemplateInfo> {
         let hero_data = self.get(hero_id).await?;
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let talent_scheme = game_data
             .talent_scheme
@@ -1913,7 +1913,7 @@ impl HeroModel<HeroData> for UserHeroModel {
         style: i32,
     ) -> Result<(Vec<(u32, i32)>, Vec<(i32, i32)>)> {
         let hero_data = self.get(hero_id).await?;
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let style_cost = game_data
             .talent_style_cost

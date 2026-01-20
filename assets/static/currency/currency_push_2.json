@@ -1,0 +1,10 @@
+{
+  "changeCurrency": [
+    {
+      "currencyId": 5,
+      "quantity": 133543,
+      "lastRecoverTime": 1698336897000,
+      "expiredTime": 0
+    }
+  ]
+}

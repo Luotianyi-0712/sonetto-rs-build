@@ -66,7 +66,7 @@ pub async fn on_unlock_talent_style(
     }
 
     let (cost_items, cost_currencies) = {
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let style_cost = game_data
             .talent_style_cost
             .iter()

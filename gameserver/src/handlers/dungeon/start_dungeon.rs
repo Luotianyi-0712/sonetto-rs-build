@@ -4,7 +4,7 @@ use crate::state::{
     ActiveBattle, BattleContext, ConnectionContext, create_battle, default_max_ap,
     generate_initial_deck,
 };
-use data::exceldb;
+use codegen::configs;
 use database::db::game::dungeons::{get_user_dungeon, update_dungeon_progress};
 use prost::Message;
 use sonettobuf::{CmdId, DungeonUpdatePush, StartDungeonReply, StartDungeonRequest, UserDungeon};
@@ -31,7 +31,7 @@ pub async fn on_start_dungeon(
         )
     };
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let episode_cfg = game_data
         .episode

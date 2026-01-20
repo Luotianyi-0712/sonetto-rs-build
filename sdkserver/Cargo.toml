@@ -20,4 +20,4 @@ database.workspace = true
 gameserver.workspace = true
 chrono.workspace = true
 anyhow.workspace = true
-data.workspace = true
+codegen.workspace = true

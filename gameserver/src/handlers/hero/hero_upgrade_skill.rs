@@ -40,7 +40,7 @@ pub async fn on_hero_upgrade_skill(
             return Err(AppError::InvalidRequest);
         }
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
         let character = game_data
             .character
             .iter()

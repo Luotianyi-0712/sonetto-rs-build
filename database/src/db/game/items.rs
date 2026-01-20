@@ -151,7 +151,7 @@ pub async fn add_power_items(
 ) -> sqlx::Result<Vec<i32>> {
     let mut changed_item_ids = Vec::new();
     let now = common::time::ServerTime::now_ms();
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     for (item_id, quantity) in power_items {
         let power_item_config = game_data.power_item.iter().find(|p| p.id == *item_id);
         let expire_time = if let Some(config) = power_item_config {

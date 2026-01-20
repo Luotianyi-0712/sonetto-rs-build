@@ -229,6 +229,7 @@ pub async fn dispatch_command(
         CmdId::Act165GetInfoCmd => events::on_act165_get_info,
         CmdId::GetAct208InfoCmd => events::on_get_act208_info,
         CmdId::GetAct209InfoCmd => events::on_get_act209_info,
+        CmdId::GetAct212InfoCmd => events::on_act212_get_info,
     });
 
     Ok(())

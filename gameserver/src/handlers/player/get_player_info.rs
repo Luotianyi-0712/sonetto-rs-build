@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::network::packet::ClientPacket;
 use crate::state::ConnectionContext;
-use data::exceldb;
+use codegen::configs;
 use database::db::game::player_infos;
 use sonettobuf::{CmdId, GetPlayerInfoReply, OpenInfo};
 use std::sync::Arc;
@@ -20,13 +20,13 @@ pub async fn on_get_player_info(
             .ok_or_else(|| AppError::Custom("Player info not found".to_string()))?
     };
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let openinfos: Vec<OpenInfo> = game_data
         .open
         .iter()
         .map(|open| OpenInfo {
             id: open.id,
-            is_open: true, // TODO: Check actual unlock conditions per player
+            is_open: open.id != 280001 && open.id != 220104, // Both IDs should be closed
         })
         .collect();
 

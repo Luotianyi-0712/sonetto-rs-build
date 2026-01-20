@@ -23,7 +23,7 @@ impl BuffMgr {
     pub fn add_buff(&mut self, target_uid: i64, buff_id: i32, from_uid: i64) {
         let entry = self.active.entry(target_uid).or_default();
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let duration = game_data
             .skill_buff

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use data::exceldb;
+use codegen::configs;
 use database::models::game::summon::SpPoolInfo;
 
 mod helpers;
@@ -18,7 +18,7 @@ pub use state::{BannerType, GachaState, load_gacha_state, save_gacha_state};
 use crate::state::gacha::helpers::parse_weighted_id_list;
 
 pub async fn build_gacha(pool_id: i32, sp_pool_info: Option<&SpPoolInfo>) -> Result<GachaPool> {
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let pool_cfg = game_data
         .summon_pool

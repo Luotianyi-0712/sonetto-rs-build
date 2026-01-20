@@ -250,7 +250,7 @@ pub async fn increment_summon_count(
     count: i32,
 ) -> Result<()> {
     let now = common::time::ServerTime::now_ms();
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let summon_pool = game_data
         .summon_pool
         .iter()

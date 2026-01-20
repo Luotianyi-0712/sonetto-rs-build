@@ -44,7 +44,7 @@ pub async fn on_use_item(
         let is_hero_selector = matches!(material_id, 481022 | 481004);
 
         let (item_rewards, currency_rewards) = if is_hero_selector && request.target_id.is_some() {
-            let game_data = data::exceldb::get();
+            let game_data = codegen::configs::get();
             if let Some(cfg) = game_data.item.get(material_id as i32) {
                 let hero_ids: Vec<i32> = cfg
                     .effect
@@ -105,7 +105,7 @@ pub async fn on_use_item(
         }
     }
 
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let mut final_items = Vec::new();
 
     for (item_id, amount) in all_items {

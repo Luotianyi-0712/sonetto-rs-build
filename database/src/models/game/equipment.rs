@@ -176,7 +176,7 @@ impl EquipmentModel<Equipment> for UserEquipmentModel {
         consume_items: Vec<(i64, i32)>,
     ) -> Result<(i32, Vec<i32>)> {
         let mut target = self.get(target_uid).await?;
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let target_equip_data = game_data
             .equip

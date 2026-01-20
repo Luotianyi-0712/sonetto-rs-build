@@ -37,7 +37,7 @@ pub async fn on_hero_talent_up(
         let current_talent = hero_data.record.talent;
         let new_talent = current_talent + 1;
 
-        let game_data = data::exceldb::get();
+        let game_data = codegen::configs::get();
 
         let talent_config = game_data
             .character_talent

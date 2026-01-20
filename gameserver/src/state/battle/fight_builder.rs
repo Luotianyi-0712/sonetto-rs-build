@@ -44,7 +44,7 @@ pub async fn build_fight(
 }
 
 static TRIAL_UID_MAP: Lazy<HashMap<i64, i32>> = Lazy::new(|| {
-    let game_data = data::exceldb::get();
+    let game_data = codegen::configs::get();
     let mut map = HashMap::new();
 
     let trial_heroes: Vec<_> = game_data.hero_trial.iter().collect();
@@ -107,10 +107,10 @@ fn build_trial_hero_entity(
     position: i32,
     team_type: i32,
 ) -> Result<sonettobuf::FightEntityInfo> {
-    use data::exceldb;
+    use codegen::configs;
     use sonettobuf::{EquipRecord, FightEntityInfo, HeroAttribute};
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     // Look up trial hero using the map
     let trial_id = TRIAL_UID_MAP
@@ -287,8 +287,8 @@ pub struct BattleSetup {
 }
 
 async fn build_defender_team(episode_id: i32) -> Result<BattleSetup> {
-    use data::exceldb;
-    let game_data = exceldb::get();
+    use codegen::configs;
+    let game_data = configs::get();
 
     let episode = game_data
         .episode
@@ -382,10 +382,10 @@ fn build_enemy_entity(
     position: i32,
     team_type: i32,
 ) -> Result<sonettobuf::FightEntityInfo> {
-    use data::exceldb;
+    use codegen::configs;
     use sonettobuf::{EquipRecord, FightEntityInfo, HeroAttribute};
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
 
     let monster = game_data
         .monster
@@ -556,9 +556,9 @@ fn parse_monster_skill_group(active_skill: &str, target_group: i32) -> Vec<i32> 
 }
 
 fn build_player_skills(cloth_id: Option<i32>) -> Vec<sonettobuf::PlayerSkillInfo> {
-    use data::exceldb;
+    use codegen::configs;
 
-    let game_data = exceldb::get();
+    let game_data = configs::get();
     let cloth_id = cloth_id.unwrap_or(1);
 
     let cloth_level = game_data
