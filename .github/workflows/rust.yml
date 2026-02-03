@@ -98,6 +98,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-target-
 
+      - name: Clean and regenerate config files
+        run: |
+          echo "Removing old generated config files..."
+          rm -rf lib/config/configs
+          echo "Touching build.rs to force rebuild..."
+          touch lib/config/build.rs
+          echo "Cleaning config package..."
+          cargo clean -p config
+        shell: bash
+
       - name: Build gameserver
         run: cargo build --release --target ${{ matrix.target }} -p gameserver
 
