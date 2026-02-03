@@ -102,10 +102,13 @@ jobs:
         run: |
           echo "Removing old generated config files..."
           rm -rf lib/config/configs
+          echo "Removing cached config build artifacts..."
+          rm -rf target/*/release/build/config-*
+          rm -rf target/*/release/.fingerprint/config-*
+          rm -rf target/release/build/config-*
+          rm -rf target/release/.fingerprint/config-*
           echo "Touching build.rs to force rebuild..."
           touch lib/config/build.rs
-          echo "Cleaning config package..."
-          cargo clean -p config
         shell: bash
 
       - name: Build gameserver
