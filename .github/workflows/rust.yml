@@ -95,6 +95,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-target-
 
+      - name: Clean generated config files to force regeneration
+        run: |
+          if [ -d "lib/config/configs" ]; then
+            rm -rf lib/config/configs
+          fi
+        shell: bash
+        continue-on-error: true
+
       - name: Build gameserver
         run: cargo build --release --target ${{ matrix.target }} -p gameserver
 
