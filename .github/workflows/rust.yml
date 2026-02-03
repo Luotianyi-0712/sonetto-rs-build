@@ -43,8 +43,21 @@ jobs:
 
       - name: Prepare data files
         run: |
+          mkdir -p data
           cp -r sonetto-data/excel2json data/
         shell: bash
+
+      - name: Set JSON_DATA_DIR for build (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: echo "JSON_DATA_DIR=${{ github.workspace }}/sonetto-data/excel2json" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set JSON_DATA_DIR for build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $path = "${{ github.workspace }}\sonetto-data\excel2json"
+          echo "JSON_DATA_DIR=$path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
 
       - name: Fix config file case (Linux)
         if: runner.os == 'Linux'
