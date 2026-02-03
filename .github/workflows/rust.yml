@@ -123,6 +123,24 @@ jobs:
             echo ""
             echo "Checking mod.rs content..."
             head -60 lib/config/configs/mod.rs
+            echo ""
+            echo "Checking lib.rs content..."
+            cat lib/config/src/lib.rs
+            echo ""
+            echo "Verifying include path..."
+            cd lib/config/src
+            if [ -f "../../config/configs/mod.rs" ]; then
+              echo "✓ Path ../../config/configs/mod.rs is valid"
+            else
+              echo "✗ Path ../../config/configs/mod.rs NOT found"
+              echo "Trying ../configs/mod.rs..."
+              if [ -f "../configs/mod.rs" ]; then
+                echo "✓ Path ../configs/mod.rs is valid"
+              else
+                echo "✗ Path ../configs/mod.rs also NOT found"
+              fi
+            fi
+            cd ../../..
           else
             echo "✗ configs directory NOT found!"
             exit 1
