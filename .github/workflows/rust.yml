@@ -98,18 +98,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-target-
 
-      - name: Clean and regenerate config files
+      - name: Clean generated config files to force regeneration
         run: |
-          echo "Removing old generated config files..."
-          rm -rf lib/config/configs
-          echo "Removing cached config build artifacts..."
-          rm -rf target/*/release/build/config-*
-          rm -rf target/*/release/.fingerprint/config-*
-          rm -rf target/release/build/config-*
-          rm -rf target/release/.fingerprint/config-*
-          echo "Touching build.rs to force rebuild..."
-          touch lib/config/build.rs
+          if [ -d "lib/config/configs" ]; then
+            rm -rf lib/config/configs
+          fi
         shell: bash
+        continue-on-error: true
 
       - name: Build gameserver
         run: cargo build --release --target ${{ matrix.target }} -p gameserver
