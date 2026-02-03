@@ -48,6 +48,8 @@ jobs:
         run: |
           mkdir -p data
           cp -r sonetto-data/excel2json data/
+          cp -r sonetto-data/static data/
+          cp -r sonetto-data/starter data/
         shell: bash
 
       - name: Set JSON_DATA_DIR for build (Linux/macOS)
