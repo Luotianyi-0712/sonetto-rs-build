@@ -111,6 +111,24 @@ jobs:
           touch lib/config/build.rs
         shell: bash
 
+      - name: Verify config generation after build
+        run: |
+          echo "Building config package first..."
+          cargo build --release --target ${{ matrix.target }} -p config
+          echo ""
+          echo "Checking if configs directory was generated..."
+          if [ -d "lib/config/configs" ]; then
+            echo "✓ configs directory exists"
+            ls -la lib/config/configs/ | head -20
+            echo ""
+            echo "Checking mod.rs content..."
+            head -60 lib/config/configs/mod.rs
+          else
+            echo "✗ configs directory NOT found!"
+            exit 1
+          fi
+        shell: bash
+
       - name: Build gameserver
         run: cargo build --release --target ${{ matrix.target }} -p gameserver
 
