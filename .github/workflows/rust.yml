@@ -38,7 +38,10 @@ jobs:
           ref: org
 
       - name: Clone Sonetto-Data from GitLab
-        run: git clone https://gitlab.com/yoncodes/sonetto-data.git sonetto-data
+        run: |
+          git clone https://gitlab.com/yoncodes/sonetto-data.git sonetto-data
+          cd sonetto-data
+          git checkout e0706fe04a8a2603ad3a43524f098310ec988a78
         shell: bash
 
       - name: Prepare data files
