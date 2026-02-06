@@ -1,11 +1,16 @@
 // Auto-generated module declarations
 
+pub mod activity101;
 pub mod activity174_role;
 pub mod activity191_role;
 pub mod antique;
 pub mod battle;
 pub mod bgm_switch;
 pub mod bonus;
+pub mod bp;
+pub mod bp_des;
+pub mod bp_lv_bonus;
+pub mod bp_task;
 pub mod chapter;
 pub mod character;
 pub mod character_cosume;
@@ -52,12 +57,17 @@ pub mod talent_style_cost;
 use std::sync::OnceLock;
 
 pub struct GameDB {
+    pub activity101: activity101::Activity101Table,
     pub activity174_role: activity174_role::Activity174RoleTable,
     pub activity191_role: activity191_role::Activity191RoleTable,
     pub antique: antique::AntiqueTable,
     pub battle: battle::BattleTable,
     pub bgm_switch: bgm_switch::BgmSwitchTable,
     pub bonus: bonus::BonusTable,
+    pub bp: bp::BpTable,
+    pub bp_des: bp_des::BpDesTable,
+    pub bp_lv_bonus: bp_lv_bonus::BpLvBonusTable,
+    pub bp_task: bp_task::BpTaskTable,
     pub chapter: chapter::ChapterTable,
     pub character: character::CharacterTable,
     pub character_cosume: character_cosume::CharacterCosumeTable,
@@ -104,6 +114,9 @@ pub struct GameDB {
 
 impl GameDB {
     pub fn load(data_dir: &str) -> anyhow::Result<Self> {
+        let activity101 = activity101::Activity101Table::load(
+            &format!("{}/activity101.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load activity101.json: {}", e))?;
         let activity174_role = activity174_role::Activity174RoleTable::load(
             &format!("{}/activity174_role.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load activity174_role.json: {}", e))?;
@@ -122,6 +135,18 @@ impl GameDB {
         let bonus = bonus::BonusTable::load(
             &format!("{}/bonus.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load bonus.json: {}", e))?;
+        let bp = bp::BpTable::load(
+            &format!("{}/bp.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load bp.json: {}", e))?;
+        let bp_des = bp_des::BpDesTable::load(
+            &format!("{}/bp_des.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load bp_des.json: {}", e))?;
+        let bp_lv_bonus = bp_lv_bonus::BpLvBonusTable::load(
+            &format!("{}/bp_lv_bonus.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load bp_lv_bonus.json: {}", e))?;
+        let bp_task = bp_task::BpTaskTable::load(
+            &format!("{}/bp_task.json", data_dir)
+        ).map_err(|e| anyhow::anyhow!("Failed to load bp_task.json: {}", e))?;
         let chapter = chapter::ChapterTable::load(
             &format!("{}/chapter.json", data_dir)
         ).map_err(|e| anyhow::anyhow!("Failed to load chapter.json: {}", e))?;
@@ -250,12 +275,17 @@ impl GameDB {
         ).map_err(|e| anyhow::anyhow!("Failed to load talent_style_cost.json: {}", e))?;
 
         Ok(Self {
+            activity101,
             activity174_role,
             activity191_role,
             antique,
             battle,
             bgm_switch,
             bonus,
+            bp,
+            bp_des,
+            bp_lv_bonus,
+            bp_task,
             chapter,
             character,
             character_cosume,

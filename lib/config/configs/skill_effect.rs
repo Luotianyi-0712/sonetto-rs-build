@@ -26,45 +26,45 @@ pub struct SkillEffect {
     pub behavior8: String,
     pub behavior9: String,
     #[serde(rename = "behaviorTarget1")]
-    pub behavior_target1: i32,
+    pub behavior_target1: String,
     #[serde(rename = "behaviorTarget10")]
-    pub behavior_target10: i32,
+    pub behavior_target10: String,
     #[serde(rename = "behaviorTarget11")]
-    pub behavior_target11: i32,
+    pub behavior_target11: String,
     #[serde(rename = "behaviorTarget12")]
-    pub behavior_target12: i32,
+    pub behavior_target12: String,
     #[serde(rename = "behaviorTarget13")]
-    pub behavior_target13: i32,
+    pub behavior_target13: String,
     #[serde(rename = "behaviorTarget14")]
-    pub behavior_target14: i32,
+    pub behavior_target14: String,
     #[serde(rename = "behaviorTarget15")]
-    pub behavior_target15: i32,
+    pub behavior_target15: String,
     #[serde(rename = "behaviorTarget16")]
-    pub behavior_target16: i32,
+    pub behavior_target16: String,
     #[serde(rename = "behaviorTarget17")]
-    pub behavior_target17: i32,
+    pub behavior_target17: String,
     #[serde(rename = "behaviorTarget18")]
-    pub behavior_target18: i32,
+    pub behavior_target18: String,
     #[serde(rename = "behaviorTarget19")]
-    pub behavior_target19: i32,
+    pub behavior_target19: String,
     #[serde(rename = "behaviorTarget2")]
-    pub behavior_target2: i32,
+    pub behavior_target2: String,
     #[serde(rename = "behaviorTarget20")]
-    pub behavior_target20: i32,
+    pub behavior_target20: String,
     #[serde(rename = "behaviorTarget3")]
-    pub behavior_target3: i32,
+    pub behavior_target3: String,
     #[serde(rename = "behaviorTarget4")]
-    pub behavior_target4: i32,
+    pub behavior_target4: String,
     #[serde(rename = "behaviorTarget5")]
-    pub behavior_target5: i32,
+    pub behavior_target5: String,
     #[serde(rename = "behaviorTarget6")]
-    pub behavior_target6: i32,
+    pub behavior_target6: String,
     #[serde(rename = "behaviorTarget7")]
-    pub behavior_target7: i32,
+    pub behavior_target7: String,
     #[serde(rename = "behaviorTarget8")]
-    pub behavior_target8: i32,
+    pub behavior_target8: String,
     #[serde(rename = "behaviorTarget9")]
-    pub behavior_target9: i32,
+    pub behavior_target9: String,
     #[serde(rename = "bigSkillPoint")]
     pub big_skill_point: i32,
     #[serde(rename = "clientIgnoreCondition")]
@@ -90,45 +90,45 @@ pub struct SkillEffect {
     pub condition8: String,
     pub condition9: String,
     #[serde(rename = "conditionTarget1")]
-    pub condition_target1: i32,
+    pub condition_target1: String,
     #[serde(rename = "conditionTarget10")]
-    pub condition_target10: i32,
+    pub condition_target10: String,
     #[serde(rename = "conditionTarget11")]
-    pub condition_target11: i32,
+    pub condition_target11: String,
     #[serde(rename = "conditionTarget12")]
-    pub condition_target12: i32,
+    pub condition_target12: String,
     #[serde(rename = "conditionTarget13")]
-    pub condition_target13: i32,
+    pub condition_target13: String,
     #[serde(rename = "conditionTarget14")]
-    pub condition_target14: i32,
+    pub condition_target14: String,
     #[serde(rename = "conditionTarget15")]
-    pub condition_target15: i32,
+    pub condition_target15: String,
     #[serde(rename = "conditionTarget16")]
-    pub condition_target16: i32,
+    pub condition_target16: String,
     #[serde(rename = "conditionTarget17")]
-    pub condition_target17: i32,
+    pub condition_target17: String,
     #[serde(rename = "conditionTarget18")]
-    pub condition_target18: i32,
+    pub condition_target18: String,
     #[serde(rename = "conditionTarget19")]
-    pub condition_target19: i32,
+    pub condition_target19: String,
     #[serde(rename = "conditionTarget2")]
-    pub condition_target2: i32,
+    pub condition_target2: String,
     #[serde(rename = "conditionTarget20")]
-    pub condition_target20: i32,
+    pub condition_target20: String,
     #[serde(rename = "conditionTarget3")]
-    pub condition_target3: i32,
+    pub condition_target3: String,
     #[serde(rename = "conditionTarget4")]
-    pub condition_target4: i32,
+    pub condition_target4: String,
     #[serde(rename = "conditionTarget5")]
-    pub condition_target5: i32,
+    pub condition_target5: String,
     #[serde(rename = "conditionTarget6")]
-    pub condition_target6: i32,
+    pub condition_target6: String,
     #[serde(rename = "conditionTarget7")]
-    pub condition_target7: i32,
+    pub condition_target7: String,
     #[serde(rename = "conditionTarget8")]
-    pub condition_target8: i32,
+    pub condition_target8: String,
     #[serde(rename = "conditionTarget9")]
-    pub condition_target9: i32,
+    pub condition_target9: String,
     #[serde(rename = "damageRate")]
     pub damage_rate: i32,
     pub desc: String,
@@ -160,7 +160,7 @@ pub struct SkillEffect {
     pub limit8: i32,
     pub limit9: i32,
     #[serde(rename = "logicTarget")]
-    pub logic_target: i32,
+    pub logic_target: String,
     #[serde(rename = "needExPoint")]
     pub need_ex_point: i32,
     #[serde(rename = "powerCost")]

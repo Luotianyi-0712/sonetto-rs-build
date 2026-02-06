@@ -9,12 +9,18 @@ pub struct MonthCard {
     pub daily_bonus: String,
     pub days: i32,
     pub id: i32,
+    #[serde(rename = "itemSource")]
+    pub item_source: i32,
     #[serde(rename = "maxDaysLimit")]
     pub max_days_limit: i32,
     #[serde(rename = "onceBonus")]
     pub once_bonus: String,
     #[serde(rename = "overMaxDayBonus")]
     pub over_max_day_bonus: String,
+    #[serde(rename = "signatureDays")]
+    pub signature_days: i32,
+    #[serde(rename = "signingItem")]
+    pub signing_item: i32,
 }
 use std::collections::HashMap;
 

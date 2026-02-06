@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Battle {
+    #[serde(rename = "actShow")]
+    pub act_show: i32,
     #[serde(rename = "actionRule")]
     pub action_rule: i32,
     #[serde(rename = "additionRule")]

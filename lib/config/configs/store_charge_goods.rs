@@ -31,6 +31,8 @@ pub struct StoreChargeGoods {
     pub id: i32,
     #[serde(rename = "isOnline")]
     pub is_online: bool,
+    #[serde(rename = "isShowTurnback")]
+    pub is_show_turnback: bool,
     pub item: String,
     pub limit: String,
     pub name: String,

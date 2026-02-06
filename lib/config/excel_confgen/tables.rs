@@ -51,4 +51,5 @@ pub const FILTER_TABLES: &[&str] = &[
     "bp_des",
     "bp_lv_bonus",
     "bp_task",
+    "activity101",
 ];
