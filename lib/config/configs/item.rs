@@ -29,6 +29,8 @@ pub struct Item {
     pub is_stackable: i32,
     #[serde(rename = "isTimeShow")]
     pub is_time_show: i32,
+    #[serde(rename = "itemSortIdx")]
+    pub item_sort_idx: i32,
     pub name: String,
     pub price: String,
     pub rare: i32,

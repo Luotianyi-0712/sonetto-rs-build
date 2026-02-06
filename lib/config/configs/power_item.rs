@@ -15,6 +15,8 @@ pub struct PowerItem {
     pub high_quality: i32,
     pub icon: String,
     pub id: i32,
+    #[serde(rename = "itemSortIdx")]
+    pub item_sort_idx: i32,
     pub name: String,
     pub rare: i32,
     pub sources: String,

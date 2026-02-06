@@ -610,26 +610,16 @@ impl SkillExecutor {
         let Some(skill) = skill else { return 0 };
 
         match index {
-            1 => skill.condition_target1,
-            2 => skill.condition_target2,
-            3 => skill.condition_target3,
-            4 => skill.condition_target4,
-            5 => skill.condition_target5,
-            6 => skill.condition_target6,
-            7 => skill.condition_target7,
-            8 => skill.condition_target8,
-            9 => skill.condition_target9,
-            10 => skill.condition_target10,
-            11 => skill.condition_target11,
-            12 => skill.condition_target12,
-            13 => skill.condition_target13,
-            14 => skill.condition_target14,
-            15 => skill.condition_target15,
-            16 => skill.condition_target16,
-            17 => skill.condition_target17,
-            18 => skill.condition_target18,
-            19 => skill.condition_target19,
-            20 => skill.condition_target20,
+            1 => skill.condition_target1.parse::<i32>().unwrap_or(0),
+            2 => skill.condition_target2.parse::<i32>().unwrap_or(0),
+            3 => skill.condition_target3.parse::<i32>().unwrap_or(0),
+            4 => skill.condition_target4.parse::<i32>().unwrap_or(0),
+            5 => skill.condition_target5.parse::<i32>().unwrap_or(0),
+            6 => skill.condition_target6.parse::<i32>().unwrap_or(0),
+            7 => skill.condition_target7.parse::<i32>().unwrap_or(0),
+            8 => skill.condition_target8.parse::<i32>().unwrap_or(0),
+            9 => skill.condition_target9.parse::<i32>().unwrap_or(0),
+
             _ => 0,
         }
     }
@@ -651,17 +641,7 @@ impl SkillExecutor {
             7 => skill.behavior7.clone(),
             8 => skill.behavior8.clone(),
             9 => skill.behavior9.clone(),
-            10 => skill.behavior10.clone(),
-            11 => skill.behavior11.clone(),
-            12 => skill.behavior12.clone(),
-            13 => skill.behavior13.clone(),
-            14 => skill.behavior14.clone(),
-            15 => skill.behavior15.clone(),
-            16 => skill.behavior16.clone(),
-            17 => skill.behavior17.clone(),
-            18 => skill.behavior18.clone(),
-            19 => skill.behavior19.clone(),
-            20 => skill.behavior20.clone(),
+
             _ => String::new(),
         }
     }
@@ -671,27 +651,18 @@ impl SkillExecutor {
         let skill = game_data.skill_effect.iter().find(|s| s.id == skill_id);
         let Some(skill) = skill else { return 0 };
 
+        // game only tracks up to 9 even tho 20 is defined lmao
         match index {
-            1 => skill.behavior_target1,
-            2 => skill.behavior_target2,
-            3 => skill.behavior_target3,
-            4 => skill.behavior_target4,
-            5 => skill.behavior_target5,
-            6 => skill.behavior_target6,
-            7 => skill.behavior_target7,
-            8 => skill.behavior_target8,
-            9 => skill.behavior_target9,
-            10 => skill.behavior_target10,
-            11 => skill.behavior_target11,
-            12 => skill.behavior_target12,
-            13 => skill.behavior_target13,
-            14 => skill.behavior_target14,
-            15 => skill.behavior_target15,
-            16 => skill.behavior_target16,
-            17 => skill.behavior_target17,
-            18 => skill.behavior_target18,
-            19 => skill.behavior_target19,
-            20 => skill.behavior_target20,
+            1 => skill.behavior_target1.parse::<i32>().unwrap_or(0),
+            2 => skill.behavior_target2.parse::<i32>().unwrap_or(0),
+            3 => skill.behavior_target3.parse::<i32>().unwrap_or(0),
+            4 => skill.behavior_target4.parse::<i32>().unwrap_or(0),
+            5 => skill.behavior_target5.parse::<i32>().unwrap_or(0),
+            6 => skill.behavior_target6.parse::<i32>().unwrap_or(0),
+            7 => skill.behavior_target7.parse::<i32>().unwrap_or(0),
+            8 => skill.behavior_target8.parse::<i32>().unwrap_or(0),
+            9 => skill.behavior_target9.parse::<i32>().unwrap_or(0),
+
             _ => 0,
         }
     }

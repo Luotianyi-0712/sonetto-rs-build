@@ -141,6 +141,8 @@ pub struct Skin {
     pub skin_store_id: i32,
     #[serde(rename = "skinStory")]
     pub skin_story: String,
+    #[serde(rename = "skinSwitchLive2dOffset")]
+    pub skin_switch_live2d_offset: String,
     #[serde(rename = "skinViewImgOffset")]
     pub skin_view_img_offset: String,
     pub spine: String,

@@ -5,11 +5,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoreChargeOptional {
+    pub desc: String,
     #[serde(rename = "goodsId")]
     pub goods_id: i32,
     pub id: i32,
     pub items: String,
+    pub name: String,
     pub rare: i32,
+    #[serde(rename = "type")]
+    pub r#type: i32,
 }
 use std::collections::HashMap;
 

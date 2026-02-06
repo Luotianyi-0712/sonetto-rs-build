@@ -20,7 +20,7 @@ fn main() {
             .unwrap()
             .parent()
             .unwrap()
-            .join("assets")
+            .join("data//excel2json")
             .to_string_lossy()
             .to_string()
     };
